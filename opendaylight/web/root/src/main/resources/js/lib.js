@@ -226,7 +226,10 @@ one.lib.modal = {
         return $clone;
     },
     // populate modal
-    populate : function($modal, header, $body, footer) {
+    populate : function($modal, header, $body, footer, ajax) {
+      if (ajax === undefined && ajax !== false) {
+        $.getJSON('/web.json'); // session check per modal
+      }
         var $h3 = $modal.find("h3");
         $h3.text(header);
 
@@ -241,6 +244,9 @@ one.lib.modal = {
     spawn : function(id, header, $body, footer) {
         var $modal = one.lib.modal.clone(id);
         one.lib.modal.populate($modal, header, $body, footer);
+        $modal.on('hide', function () {
+            $('.modal-body').scrollTop(0);
+        });
         return $modal;
     },
     // empty modal

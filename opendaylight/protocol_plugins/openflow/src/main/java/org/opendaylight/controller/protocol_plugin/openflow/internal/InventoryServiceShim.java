@@ -32,6 +32,7 @@ import org.opendaylight.controller.sal.core.Buffers;
 import org.opendaylight.controller.sal.core.Capabilities;
 import org.opendaylight.controller.sal.core.ContainerFlow;
 import org.opendaylight.controller.sal.core.Description;
+import org.opendaylight.controller.sal.core.IContainerAware;
 import org.opendaylight.controller.sal.core.IContainerListener;
 import org.opendaylight.controller.sal.core.MacAddress;
 import org.opendaylight.controller.sal.core.Node;
@@ -59,7 +60,7 @@ import org.slf4j.LoggerFactory;
  *
  */
 public class InventoryServiceShim implements IContainerListener,
-        IMessageListener, ISwitchStateListener, IOFStatisticsListener {
+        IMessageListener, ISwitchStateListener, IOFStatisticsListener, IContainerAware {
     protected static final Logger logger = LoggerFactory
             .getLogger(InventoryServiceShim.class);
     private IController controller = null;
@@ -139,7 +140,7 @@ public class InventoryServiceShim implements IContainerListener,
     }
 
     void setInventoryShimExternalListener(IInventoryShimExternalListener s) {
-        logger.trace("Set inventoryShimExternalListener");
+        logger.trace("Set inventoryShimExternalListener {}", s);
         if ((this.inventoryShimExternalListeners != null)
                 && !this.inventoryShimExternalListeners.contains(s)) {
             this.inventoryShimExternalListeners.add(s);
@@ -147,6 +148,7 @@ public class InventoryServiceShim implements IContainerListener,
     }
 
     void unsetInventoryShimExternalListener(IInventoryShimExternalListener s) {
+        logger.trace("Unset inventoryShimExternalListener {}", s);
         if ((this.inventoryShimExternalListeners != null)
                 && this.inventoryShimExternalListeners.contains(s)) {
             this.inventoryShimExternalListeners.remove(s);
@@ -235,6 +237,11 @@ public class InventoryServiceShim implements IContainerListener,
     @Override
     public void switchAdded(ISwitch sw) {
         if (sw == null) {
+            return;
+        }
+        Node node = NodeCreator.createOFNode(sw.getId());
+        if ((nodeProps.get(node) != null)  && (connectionOutService.isLocal(node))) {
+            logger.debug("Ignore switchAdded {}", sw);
             return;
         }
 
@@ -435,7 +442,6 @@ public class InventoryServiceShim implements IContainerListener,
             for (String container : containers) {
                 notifyInventoryShimInternalListener(container, node, type, props);
             }
-
             // Notify external listener
             notifyInventoryShimExternalListener(node, type, props);
 
@@ -482,8 +488,7 @@ public class InventoryServiceShim implements IContainerListener,
         Set<Property> props = new HashSet<Property>();
         Long sid = (Long) node.getID();
 
-        Date connectedSince = controller.getSwitches().get(sid)
-                .getConnectedDate();
+        Date connectedSince = sw.getConnectedDate();
         Long connectedSinceTime = (connectedSince == null) ? 0 : connectedSince
                 .getTime();
         props.add(new TimeStamp(connectedSinceTime, "connectedSince"));
@@ -510,6 +515,11 @@ public class InventoryServiceShim implements IContainerListener,
             props.add(b);
         }
 
+        if ((nodeProps.get(node) == null) &&  (connectionOutService.isLocal(node)))  {
+            // The switch is connected for the first time, flush all flows
+            // that may exist on this switch
+            sw.deleteAllFlows();
+       }
         nodeProps.put(node, props);
         // Notify all internal and external listeners
         notifyInventoryShimListener(node, type, props);
@@ -583,5 +593,44 @@ public class InventoryServiceShim implements IContainerListener,
     @Override
     public void tableStatisticsRefreshed(Long switchId, List<OFStatistics> tables) {
         // Nothing to do
+    }
+
+    @Override
+    public void containerCreate(String containerName) {
+        // Nothing to do
+    }
+
+    @Override
+    public void containerDestroy(String containerName) {
+        Set<NodeConnector> removeNodeConnectorSet = new HashSet<NodeConnector>();
+        Set<Node> removeNodeSet = new HashSet<Node>();
+        for (Map.Entry<NodeConnector, Set<String>> entry : nodeConnectorContainerMap.entrySet()) {
+            Set<String> ncContainers = entry.getValue();
+            if (ncContainers.contains(containerName)) {
+                NodeConnector nodeConnector = entry.getKey();
+                removeNodeConnectorSet.add(nodeConnector);
+            }
+        }
+        for (Map.Entry<Node, Set<String>> entry : nodeContainerMap.entrySet()) {
+            Set<String> nodeContainers = entry.getValue();
+            if (nodeContainers.contains(containerName)) {
+                Node node = entry.getKey();
+                removeNodeSet.add(node);
+            }
+        }
+        for (NodeConnector nodeConnector : removeNodeConnectorSet) {
+            Set<String> ncContainers = nodeConnectorContainerMap.get(nodeConnector);
+            ncContainers.remove(containerName);
+            if (ncContainers.isEmpty()) {
+                nodeConnectorContainerMap.remove(nodeConnector);
+            }
+        }
+        for (Node node : removeNodeSet) {
+            Set<String> nodeContainers = nodeContainerMap.get(node);
+            nodeContainers.remove(containerName);
+            if (nodeContainers.isEmpty()) {
+                nodeContainerMap.remove(node);
+            }
+        }
     }
 }

@@ -9,7 +9,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <nexusproxy>http://nexus.opendaylight.org/content</nexusproxy>
-    <yang.version>0.5.7-SNAPSHOT</yang.version>
+    <yang.version>0.5.8-SNAPSHOT</yang.version>
     <maven.bundle.version>2.4.0</maven.bundle.version>
   </properties>
 
@@ -56,7 +56,7 @@
       <plugin>
         <groupId>org.opendaylight.yangtools</groupId>
         <artifactId>yang-maven-plugin</artifactId>
-        <version>0.5.7-SNAPSHOT</version>
+        <version>${yang.version}</version>
         <executions>
           <execution>
             <goals>
@@ -79,7 +79,7 @@
           <dependency>
             <groupId>org.opendaylight.yangtools</groupId>
             <artifactId>maven-sal-api-gen-plugin</artifactId>
-            <version>0.5.7-SNAPSHOT</version>
+            <version>${yang.version}</version>
             <type>jar</type>
           </dependency>
         </dependencies>
@@ -136,9 +136,15 @@
   </build>
   <pluginRepositories>
     <pluginRepository>
-      <id>central2</id>
-      <name>central2</name>
-      <url>http://repo2.maven.org/maven2</url>
+      <id>central</id>
+      <name>maven repo1</name>
+      <url>http://repo1.maven.org/maven2</url>
+       <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
     </pluginRepository>
     <pluginRepository>
       <id>opendaylight.snapshot</id>
@@ -163,14 +169,15 @@
       <url>${nexusproxy}/repositories/ebr-bundles-external/</url>
     </repository>
     <repository>
-      <id>central2</id>
-      <name>central2</name>
-      <url>http://repo2.maven.org/maven2</url>
-    </repository>
-    <repository>
       <id>central</id>
       <name>central</name>
       <url>http://repo1.maven.org/maven2</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
     </repository>
     <!-- Pax mirror -->
     <!-- https://oss.sonatype.org/content/repositories/ops4j-releases -->

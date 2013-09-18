@@ -37,6 +37,7 @@ import org.eclipse.osgi.framework.console.CommandProvider;
 import org.opendaylight.controller.clustering.services.ICacheUpdateAware;
 import org.opendaylight.controller.clustering.services.IClusterGlobalServices;
 import org.opendaylight.controller.clustering.services.ICoordinatorChangeAware;
+import org.opendaylight.controller.connectionmanager.ConnectionLocality;
 import org.opendaylight.controller.connectionmanager.ConnectionMgmtScheme;
 import org.opendaylight.controller.connectionmanager.IConnectionManager;
 import org.opendaylight.controller.connectionmanager.scheme.AbstractScheme;
@@ -133,11 +134,17 @@ public class ConnectionManager implements IConnectionManager, IConnectionListene
     }
 
     public void init() {
+        String schemeStr = System.getProperty("connection.scheme");
         this.connectionEvents = new LinkedBlockingQueue<ConnectionMgmtEvent>();
         schemes = new ConcurrentHashMap<ConnectionMgmtScheme, AbstractScheme>();
         for (ConnectionMgmtScheme scheme : ConnectionMgmtScheme.values()) {
             AbstractScheme schemeImpl = SchemeFactory.getScheme(scheme, clusterServices);
-            if (schemeImpl != null) schemes.put(scheme, schemeImpl);
+            if (schemeImpl != null) {
+                schemes.put(scheme, schemeImpl);
+                if (scheme.name().equalsIgnoreCase(schemeStr)) {
+                    activeScheme = scheme;
+                }
+            }
         }
     }
 
@@ -177,6 +184,13 @@ public class ConnectionManager implements IConnectionManager, IConnectionListene
         AbstractScheme scheme = schemes.get(activeScheme);
         if (scheme == null) return false;
         return scheme.isLocal(node);
+    }
+
+    @Override
+    public ConnectionLocality getLocalityStatus(Node node) {
+        AbstractScheme scheme = schemes.get(activeScheme);
+        if (scheme == null) return ConnectionLocality.NOT_CONNECTED;
+        return scheme.getLocalityStatus(node);
     }
 
     @Override
@@ -352,18 +366,23 @@ public class ConnectionManager implements IConnectionManager, IConnectionListene
         String controller = ci.nextArgument();
         if (controller == null) {
             ci.println("Nodes connected to this controller : ");
-            if (this.getLocalNodes() == null) ci.println("None");
-            else ci.println(this.getLocalNodes().toString());
+            if (this.getLocalNodes() == null) {
+                ci.println("None");
+            } else {
+                ci.println(this.getLocalNodes().toString());
+            }
             return;
         }
         try {
             InetAddress address = InetAddress.getByName(controller);
             ci.println("Nodes connected to controller "+controller);
-            if (this.getNodes(address) == null) ci.println("None");
-            else ci.println(this.getNodes(address).toString());
-            return;
+            if (this.getNodes(address) == null) {
+                ci.println("None");
+            } else {
+                ci.println(this.getNodes(address).toString());
+            }
         } catch (UnknownHostException e) {
-            e.printStackTrace();
+           logger.error("An error occured",e);
         }
     }
 

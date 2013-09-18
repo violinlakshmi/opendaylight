@@ -102,12 +102,12 @@
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>containermanager</artifactId>
-      <version>0.4.0-SNAPSHOT</version>
+      <version>0.5.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
-      <artifactId>containermanager.implementation</artifactId>
-      <version>0.4.0-SNAPSHOT</version>
+      <artifactId>containermanager.it.implementation</artifactId>
+      <version>0.5.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
@@ -130,7 +130,7 @@
     <!-- Sonar jacoco plugin to get integration test coverage info -->
     <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
     <sonar.jacoco.reportPath>../implementation/target/jacoco.exec</sonar.jacoco.reportPath>
-    <sonar.jacoco.itReportPath>../implementaiton/target/jacoco-it.exec</sonar.jacoco.itReportPath>
+    <sonar.jacoco.itReportPath>../implementation/target/jacoco-it.exec</sonar.jacoco.itReportPath>
     <sonar.language>java</sonar.language>
   </properties>
   <build>
@@ -147,7 +147,7 @@
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.5.3.201107060350</version>
+        <version>${jacoco.version}</version>
         <configuration>
           <destFile>../implementation/target/jacoco-it.exec</destFile>
           <includes>org.opendaylight.controller.*</includes>

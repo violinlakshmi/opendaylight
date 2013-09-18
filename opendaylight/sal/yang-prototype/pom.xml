@@ -43,9 +43,15 @@
 
     <pluginRepositories>
         <pluginRepository>
-          <id>central2</id>
-          <name>central2</name>
-          <url>http://repo2.maven.org/maven2</url>
+          <id>central</id>
+          <name>maven repo1</name>
+          <url>http://repo1.maven.org/maven2</url>
+          <snapshots>
+             <enabled>false</enabled>
+          </snapshots>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
         </pluginRepository>
         <pluginRepository>
             <id>opendaylight.snapshot</id>
@@ -71,14 +77,15 @@
             <url>${nexusproxy}/repositories/ebr-bundles-external/</url>
         </repository>
         <repository>
-          <id>central2</id>
-          <name>central2</name>
-          <url>http://repo2.maven.org/maven2</url>
-        </repository>
-        <repository>
           <id>central</id>
           <name>central</name>
           <url>http://repo1.maven.org/maven2</url>
+          <snapshots>
+             <enabled>false</enabled>
+          </snapshots>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
         </repository>
         <!-- Pax mirror -->
         <!-- https://oss.sonatype.org/content/repositories/ops4j-releases -->

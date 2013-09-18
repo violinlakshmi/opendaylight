@@ -10,12 +10,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import javax.transaction.SystemException;
-
 import org.opendaylight.controller.clustering.services.CacheConfigException;
 import org.opendaylight.controller.clustering.services.CacheExistException;
 import org.opendaylight.controller.clustering.services.IClusterGlobalServices;
 import org.opendaylight.controller.clustering.services.IClusterServices;
+import org.opendaylight.controller.connectionmanager.ConnectionLocality;
 import org.opendaylight.controller.connectionmanager.ConnectionMgmtScheme;
 import org.opendaylight.controller.sal.core.Node;
 import org.opendaylight.controller.sal.utils.Status;
@@ -128,7 +127,6 @@ public abstract class AbstractScheme {
         return controllerNodesMap.get(controller);
     }
 
-    @SuppressWarnings("deprecation")
     public Set<Node> getNodes() {
         return getNodes(clusterServices.getMyAddress());
     }
@@ -142,7 +140,6 @@ public abstract class AbstractScheme {
         return nodeConnections;
     }
 
-    @SuppressWarnings("deprecation")
     public boolean isLocal(Node node) {
         if (nodeConnections == null) return false;
         InetAddress myController = clusterServices.getMyAddress();
@@ -150,7 +147,15 @@ public abstract class AbstractScheme {
         return (controllers != null && controllers.contains(myController));
     }
 
-    @SuppressWarnings("deprecation")
+    public ConnectionLocality getLocalityStatus(Node node) {
+        if (nodeConnections == null) return ConnectionLocality.NOT_CONNECTED;
+        Set<InetAddress> controllers = nodeConnections.get(node);
+        if (controllers == null || controllers.size() == 0) return ConnectionLocality.NOT_CONNECTED;
+        InetAddress myController = clusterServices.getMyAddress();
+        return controllers.contains(myController) ? ConnectionLocality.LOCAL:
+                                                    ConnectionLocality.NOT_LOCAL;
+    }
+
     public Status removeNode (Node node) {
         return removeNodeFromController(node, clusterServices.getMyAddress());
     }
@@ -313,7 +318,7 @@ public abstract class AbstractScheme {
         } catch (CacheConfigException cce) {
             log.error("\nCache configuration invalid - check cache mode");
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("An error occured",e);
         }
     }
 }

@@ -55,15 +55,29 @@ public class DaylightWebAdmin {
         if (clusterServices == null) {
             return null;
         }
+        IConnectionManager connectionManager = (IConnectionManager) ServiceHelper.getGlobalInstance(
+                IConnectionManager.class, this);
+        if (connectionManager == null) {
+            return null;
+        }
 
         List<ClusterNodeBean> clusterNodes = new ArrayList<ClusterNodeBean>();
 
         List<InetAddress> controllers = clusterServices.getClusteredControllers();
         for (InetAddress controller : controllers) {
             ClusterNodeBean.Builder clusterBeanBuilder = new ClusterNodeBean.Builder(controller);
+
+            //get number of connected nodes
+            Set<Node> connectedNodes = connectionManager.getNodes(controller);
+            int numNodes = connectedNodes == null ? 0 : connectedNodes.size();
+            clusterBeanBuilder.nodesConnected(numNodes);
+
+            //determine if this is the executing controller
             if (controller.equals(clusterServices.getMyAddress())) {
                 clusterBeanBuilder.highlightMe();
             }
+
+            //determine whether this is coordinator
             if (clusterServices.getCoordinatorAddress().equals(controller)) {
                 clusterBeanBuilder.iAmCoordinator();
             }
@@ -157,7 +171,9 @@ public class DaylightWebAdmin {
         }
 
         Gson gson = new Gson();
-        UserConfig config = gson.fromJson(json, UserConfig.class);
+        UserConfig plainConfig = gson.fromJson(json, UserConfig.class);
+        // Recreate using the proper constructor which will hash the password
+        UserConfig config = new UserConfig(plainConfig.getUser(), plainConfig.getPassword(), plainConfig.getRoles());
 
         Status result = (action.equals("add")) ? userManager.addLocalUser(config) : userManager.removeLocalUser(config);
         if (result.isSuccess()) {

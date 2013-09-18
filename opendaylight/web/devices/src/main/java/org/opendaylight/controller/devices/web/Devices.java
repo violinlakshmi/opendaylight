@@ -8,9 +8,9 @@
 
 package org.opendaylight.controller.devices.web;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -55,14 +55,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
 @Controller
 @RequestMapping("/")
 public class Devices implements IDaylightWeb {
     private static final UserLevel AUTH_LEVEL = UserLevel.CONTAINERUSER;
-    private final String WEB_NAME = "Devices";
-    private final String WEB_ID = "devices";
-    private final short WEB_ORDER = 1;
+    private static final String WEB_NAME = "Devices";
+    private static final String WEB_ID = "devices";
+    private static final short WEB_ORDER = 1;
 
     public Devices() {
         ServiceHelper.registerGlobalService(IDaylightWeb.class, this, null);
@@ -400,35 +401,32 @@ public class Devices implements IDaylightWeb {
             @RequestParam(required = false) String container) {
         Gson gson = new Gson();
         List<Map<String, String>> subnets = new ArrayList<Map<String, String>>();
-        String containerName = (container == null) ? GlobalConstants.DEFAULT
-                .toString() : container;
+        String containerName = (container == null) ? GlobalConstants.DEFAULT.toString() : container;
 
         // Derive the privilege this user has on the current container
         String userName = request.getUserPrincipal().getName();
-        Privilege privilege = DaylightWebUtil.getContainerPrivilege(
-                userName, containerName, this);
+        Privilege privilege = DaylightWebUtil.getContainerPrivilege(userName, containerName, this);
 
         if (privilege != Privilege.NONE) {
-            ISwitchManager switchManager = (ISwitchManager) ServiceHelper
-                    .getInstance(ISwitchManager.class, containerName, this);
+            ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class,
+                    containerName, this);
             if (switchManager != null) {
                 for (SubnetConfig conf : switchManager.getSubnetsConfigList()) {
                     Map<String, String> subnet = new HashMap<String, String>();
                     subnet.put("name", conf.getName());
                     subnet.put("subnet", conf.getSubnet());
                     List<SubnetGatewayPortBean> portsList = new ArrayList<SubnetGatewayPortBean>();
-                    Iterator<NodeConnector> itor = conf.getSubnetNodeConnectors().iterator();
+                    Iterator<NodeConnector> itor = conf.getNodeConnectors().iterator();
                     while(itor.hasNext()) {
                         SubnetGatewayPortBean bean = new SubnetGatewayPortBean();
                         NodeConnector nodeConnector = itor.next();
                         String nodeName = getNodeDesc(nodeConnector.getNode().toString(), containerName);
                         Name ncName = ((Name) switchManager.getNodeConnectorProp(nodeConnector, Name.NamePropName));
                         String nodeConnectorName = (ncName != null) ? ncName.getValue() : "";
-                        nodeConnectorName += " (" + nodeConnector.getID() + ")";
                         bean.setNodeName(nodeName);
                         bean.setNodePortName(nodeConnectorName);
                         bean.setNodeId(nodeConnector.getNode().toString());
-                        bean.setNodePortId(nodeConnector.getID().toString());
+                        bean.setNodePortId(nodeConnector.toString());
                         portsList.add(bean);
                     }
                     subnet.put("nodePorts", gson.toJson(portsList));
@@ -464,7 +462,7 @@ public class Devices implements IDaylightWeb {
             ISwitchManager switchManager = (ISwitchManager) ServiceHelper
                     .getInstance(ISwitchManager.class, containerName, this);
             SubnetConfig cfgObject = new SubnetConfig(gatewayName,
-                    gatewayIPAddress, new HashSet<String>());
+                    gatewayIPAddress, new ArrayList<String>());
             Status result = switchManager.addSubnet(cfgObject);
             if (result.isSuccess()) {
                 resultBean.setStatus(true);
@@ -539,14 +537,17 @@ public class Devices implements IDaylightWeb {
         try {
             ISwitchManager switchManager = (ISwitchManager) ServiceHelper
                     .getInstance(ISwitchManager.class, containerName, this);
-            Status result = switchManager.addPortsToSubnet(portsName, nodeId
-                    + "/" + ports);
+            List<String> toAdd = new ArrayList<String>();
+            for (String port : ports.split(",")) {
+                toAdd.add(port);
+            }
+            Status result = switchManager.addPortsToSubnet(portsName, toAdd);
 
             if (result.isSuccess()) {
                 resultBean.setStatus(true);
                 resultBean
                         .setMessage("Added ports to subnet gateway address successfully");
-                DaylightWebUtil.auditlog("Ports to Subnet Gateway", userName, "added",nodeId+"/"+ ports, containerName);
+                DaylightWebUtil.auditlog("Ports to Subnet Gateway", userName, "added", ports, containerName);
             } else {
                 resultBean.setStatus(false);
                 resultBean.setMessage(result.getDescription());
@@ -578,13 +579,15 @@ public class Devices implements IDaylightWeb {
         try {
             ISwitchManager switchManager = (ISwitchManager) ServiceHelper
                     .getInstance(ISwitchManager.class, containerName, this);
-            Status result = switchManager.removePortsFromSubnet(gatewayName,
-                    nodePort);
+            List<String> toRemove = new ArrayList<String>();
+            for (String port : nodePort.split(",")) {
+                toRemove.add(port);
+            }
+            Status result = switchManager.removePortsFromSubnet(gatewayName, toRemove);
 
             if (result.isSuccess()) {
                 resultBean.setStatus(true);
-                resultBean
-                        .setMessage("Deleted port from subnet gateway address successfully");
+                resultBean.setMessage("Deleted port from subnet gateway address successfully");
                 DaylightWebUtil.auditlog("Ports from Subnet Gateway", userName, "removed", nodePort, containerName);
             } else {
                 resultBean.setStatus(false);
@@ -630,9 +633,14 @@ public class Devices implements IDaylightWeb {
                     Map<String, String> config = new HashMap<String, String>();
                     for (String name : config_data.keySet()) {
                         config.put(name, config_data.get(name));
-                        // Add switch name value (non-configuration field)
+                        // Add switch portName value (non-configuration field)
                         config.put("nodeName",
                                 getNodeDesc(config_data.get("nodeId"), containerName));
+                        NodeConnector spanPortNodeConnector = NodeConnector.fromString(config_data.get("spanPort"));
+                        Name ncName = ((Name) switchManager.getNodeConnectorProp(spanPortNodeConnector,
+                                Name.NamePropName));
+                        String spanPortName = (ncName != null) ? ncName.getValue() : "";
+                        config.put("spanPortName", spanPortName);
                     }
                     config.put("json", config_json);
                     spanConfigs.add(config);
@@ -651,10 +659,8 @@ public class Devices implements IDaylightWeb {
 
     @RequestMapping(value = "/nodeports")
     @ResponseBody
-    public List<NodeJsonBean> getNodePorts(HttpServletRequest request,
-            @RequestParam(required = false) String container) {
-        String containerName = (container == null) ? GlobalConstants.DEFAULT
-                .toString() : container;
+    public String getNodePorts(HttpServletRequest request, @RequestParam(required = false) String container) {
+        String containerName = (container == null) ? GlobalConstants.DEFAULT.toString() : container;
 
         // Derive the privilege this user has on the current container
         String userName = request.getUserPrincipal().getName();
@@ -671,16 +677,13 @@ public class Devices implements IDaylightWeb {
 
         for (Switch node : switchManager.getNetworkDevices()) {
             NodeJsonBean nodeJsonBean = new NodeJsonBean();
-            List<String> port = new ArrayList<String>();
+            List<PortJsonBean> port = new ArrayList<PortJsonBean>();
             Set<NodeConnector> nodeConnectorSet = node.getNodeConnectors();
-
             if (nodeConnectorSet != null) {
                 for (NodeConnector nodeConnector : nodeConnectorSet) {
                     String nodeConnectorName = ((Name) switchManager
-                            .getNodeConnectorProp(nodeConnector,
-                                    Name.NamePropName)).getValue();
-                    port.add(nodeConnectorName
-                            + "(" + nodeConnector.getID() + ")");
+                            .getNodeConnectorProp(nodeConnector, Name.NamePropName)).getValue();
+                    port.add(new PortJsonBean(nodeConnector.getID().toString(), nodeConnectorName, nodeConnector.toString()));
                 }
             }
             nodeJsonBean.setNodeId(node.getNode().toString());
@@ -689,7 +692,7 @@ public class Devices implements IDaylightWeb {
             nodeJsonBeans.add(nodeJsonBean);
         }
 
-        return nodeJsonBeans;
+        return new Gson().toJson(nodeJsonBeans);
     }
 
     @RequestMapping(value = "/spanPorts/add", method = RequestMethod.GET)
@@ -750,22 +753,21 @@ public class Devices implements IDaylightWeb {
             Gson gson = new Gson();
             ISwitchManager switchManager = (ISwitchManager) ServiceHelper
                     .getInstance(ISwitchManager.class, containerName, this);
-            String[] spans = spanPortsToDelete.split("###");
+            Type collectionType = new TypeToken<List<SpanPortJsonBean>>() {}.getType();
+            List<SpanPortJsonBean> jsonBeanList = gson.fromJson(spanPortsToDelete, collectionType);
+            for (SpanPortJsonBean jsonBean : jsonBeanList) {
+                SpanConfig cfgObject = gson
+                        .fromJson(gson.toJson(jsonBean), SpanConfig.class);
+                Status result = switchManager.removeSpanConfig(cfgObject);
+                if (!result.isSuccess()) {
+                    resultBean.setStatus(false);
+                    resultBean.setMessage(result.getDescription());
+                    break;
+                }
+                DaylightWebUtil.auditlog("SPAN Port", userName, "removed", cfgObject.getNodeId(), containerName);
+            }
             resultBean.setStatus(true);
             resultBean.setMessage("SPAN Port(s) deleted successfully");
-            for (String span : spans) {
-                if (!span.isEmpty()) {
-                    SpanConfig cfgObject = gson
-                            .fromJson(span, SpanConfig.class);
-                    Status result = switchManager.removeSpanConfig(cfgObject);
-                    if (!result.isSuccess()) {
-                        resultBean.setStatus(false);
-                        resultBean.setMessage(result.getDescription());
-                        break;
-                    }
-                    DaylightWebUtil.auditlog("SPAN Port", userName, "removed", cfgObject.getNodeId(), containerName);
-                }
-            }
         } catch (Exception e) {
             resultBean.setStatus(false);
             resultBean.setMessage("Error occurred while deleting span port. "

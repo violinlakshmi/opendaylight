@@ -54,13 +54,15 @@
     <javassist.version>3.17.1-GA</javassist.version>
     <sample-toaster.version>1.0-SNAPSHOT</sample-toaster.version>
     <releaseplugin.version>2.3.2</releaseplugin.version>
+    <commons.lang.version>3.1</commons.lang.version>
+    <jacoco.version>0.5.3.201107060350</jacoco.version>
   </properties>
 
   <pluginRepositories>
     <pluginRepository>
-      <id>central2</id>
-      <name>central2</name>
-      <url>http://repo2.maven.org/maven2</url>
+      <id>central</id>
+      <name>maven repo1</name>
+      <url>http://repo1.maven.org/maven2</url>
     </pluginRepository>
   </pluginRepositories>
 
@@ -125,7 +127,6 @@
           <groupId>com.google.guava</groupId>
           <artifactId>guava</artifactId>
           <version>${guava.version}</version>
-          <type>jar</type>
         </dependency>
         <dependency>
           <groupId>org.javassist</groupId>
@@ -207,14 +208,15 @@
       <url>${nexusproxy}/repositories/ebr-bundles-external/</url>
     </repository>
     <repository>
-      <id>central2</id>
-      <name>central2</name>
-      <url>http://repo2.maven.org/maven2</url>
-    </repository>
-    <repository>
       <id>central</id>
       <name>central</name>
       <url>http://repo1.maven.org/maven2</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+      <releases>
+          <enabled>true</enabled>
+      </releases>
     </repository>
     <!-- Pax mirror -->
     <!-- https://oss.sonatype.org/content/repositories/ops4j-releases -->
@@ -426,9 +428,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>${surefire.version}</version>
-        <configuration>
-          <argLine>${testvm.argLine}</argLine>
-        </configuration>
       </plugin>
     </plugins>
     <pluginManagement>
@@ -620,6 +619,11 @@
       <version>${jackson.version}</version>
     </dependency>
     <dependency>
+      <groupId>org.codehaus.jackson</groupId>
+      <artifactId>jackson-xc</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
       <groupId>org.codehaus.jettison</groupId>
       <artifactId>jettison</artifactId>
       <version>1.3.3</version>
@@ -774,7 +778,7 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-lang3</artifactId>
-      <version>3.1</version>
+      <version>${commons.lang.version}</version>
     </dependency>
     <dependency>
       <groupId>virgomirror</groupId>
@@ -1003,6 +1007,11 @@
       <groupId>com.sun.jersey</groupId>
       <artifactId>jersey-json</artifactId>
       <version>${jersey.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>org.ow2.asm</groupId>
+        <artifactId>asm-all</artifactId>
+        <version>4.1</version>
     </dependency>
   </dependencies>
 </project>
