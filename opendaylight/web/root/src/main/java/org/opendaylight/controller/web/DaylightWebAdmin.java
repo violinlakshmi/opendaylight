@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
 
 import org.opendaylight.controller.clustering.services.IClusterGlobalServices;
 import org.opendaylight.controller.connectionmanager.IConnectionManager;
@@ -45,6 +46,7 @@ public class DaylightWebAdmin {
     /**
      * Returns list of clustered controllers. Highlights "this" controller and
      * if controller is coordinator
+     *
      * @return List<ClusterBean>
      */
     @RequestMapping("/cluster")
@@ -67,17 +69,17 @@ public class DaylightWebAdmin {
         for (InetAddress controller : controllers) {
             ClusterNodeBean.Builder clusterBeanBuilder = new ClusterNodeBean.Builder(controller);
 
-            //get number of connected nodes
+            // get number of connected nodes
             Set<Node> connectedNodes = connectionManager.getNodes(controller);
             int numNodes = connectedNodes == null ? 0 : connectedNodes.size();
             clusterBeanBuilder.nodesConnected(numNodes);
 
-            //determine if this is the executing controller
+            // determine if this is the executing controller
             if (controller.equals(clusterServices.getMyAddress())) {
                 clusterBeanBuilder.highlightMe();
             }
 
-            //determine whether this is coordinator
+            // determine whether this is coordinator
             if (clusterServices.getCoordinatorAddress().equals(controller)) {
                 clusterBeanBuilder.iAmCoordinator();
             }
@@ -89,6 +91,7 @@ public class DaylightWebAdmin {
 
     /**
      * Return nodes connected to controller {controller}
+     *
      * @param controller
      *            - byte[] of the address of the controller
      * @return List<NodeBean>
@@ -178,7 +181,16 @@ public class DaylightWebAdmin {
         Status result = (action.equals("add")) ? userManager.addLocalUser(config) : userManager.removeLocalUser(config);
         if (result.isSuccess()) {
             String userAction = (action.equals("add")) ? "added" : "removed";
-            DaylightWebUtil.auditlog("User", request.getUserPrincipal().getName(), userAction, config.getUser());
+            if (action.equals("add")) {
+                String userRoles = "";
+                for (String userRole : config.getRoles()) {
+                    userRoles = userRoles + userRole + ",";
+                }
+                DaylightWebUtil.auditlog("User", request.getUserPrincipal().getName(), userAction, config.getUser()
+                        + " as " + userRoles.substring(0, userRoles.length() - 1));
+            } else {
+                DaylightWebUtil.auditlog("User", request.getUserPrincipal().getName(), userAction, config.getUser());
+            }
             return "Success";
         }
         return result.getDescription();
@@ -212,30 +224,71 @@ public class DaylightWebAdmin {
 
     @RequestMapping(value = "/users/password/{username}", method = RequestMethod.POST)
     @ResponseBody
-    public Status changePassword(@PathVariable("username") String username, HttpServletRequest request,
-            @RequestParam("currentPassword") String currentPassword, @RequestParam("newPassword") String newPassword) {
+    public Status changePassword(
+            @PathVariable("username") String username, HttpServletRequest request,
+            @RequestParam(value = "currentPassword", required=false) String currentPassword,
+            @RequestParam("newPassword") String newPassword) {
         IUserManager userManager = (IUserManager) ServiceHelper.getGlobalInstance(IUserManager.class, this);
         if (userManager == null) {
-            return new Status(StatusCode.GONE, "User Manager not found");
+            return new Status(StatusCode.NOSERVICE, "User Manager unavailable");
         }
 
-        if (!authorize(userManager, UserLevel.NETWORKADMIN, request)) {
-            return new Status(StatusCode.FORBIDDEN, "Operation not permitted");
+        Status status;
+        String requestingUser = request.getUserPrincipal().getName();
+
+        //changing own password
+        if (requestingUser.equals(username) ) {
+            status = userManager.changeLocalUserPassword(username, currentPassword, newPassword);
+            //enforce the user to re-login with new password
+            if (status.isSuccess() && !newPassword.equals(currentPassword)) {
+                userManager.userLogout(username);
+                HttpSession session = request.getSession(false);
+                if ( session != null) {
+                    session.invalidate();
+                }
+            }
+
+        //admin level user resetting other's password
+        } else if (authorize(userManager, UserLevel.NETWORKADMIN, request)) {
+
+            //Since User Manager doesn't have an unprotected password change API,
+            //we re-create the user with the new password (and current roles).
+            List<String> roles = userManager.getUserRoles(username);
+            UserConfig newConfig = new UserConfig(username, newPassword, roles);
+
+            //validate before removing existing config, so we don't remove but fail to add
+            status = newConfig.validate();
+            if (!status.isSuccess()) {
+                return status;
+            }
+
+            userManager.userLogout(username);
+            status = userManager.removeLocalUser(username);
+            if (!status.isSuccess()) {
+                return status;
+            }
+            if (userManager.addLocalUser(newConfig).isSuccess()) {
+                status = new Status(StatusCode.SUCCESS, "Password for user " + username + " reset successfully.");
+            } else {
+                //unexpected
+                status = new Status(StatusCode.INTERNALERROR, "Failed resetting password for user " + username + ". User is now removed.");
+            }
+
+        //unauthorized
+        } else {
+            status = new Status(StatusCode.UNAUTHORIZED, "Operation not permitted");
         }
 
-        if (newPassword.isEmpty()) {
-            return new Status(StatusCode.BADREQUEST, "Empty passwords not allowed");
-        }
-
-        Status status = userManager.changeLocalUserPassword(username, currentPassword, newPassword);
         if (status.isSuccess()) {
-            DaylightWebUtil.auditlog("User", request.getUserPrincipal().getName(), "changed password for", username);
+            DaylightWebUtil.auditlog("User", request.getUserPrincipal().getName(), " changed password for User ",
+                    username);
         }
         return status;
     }
 
     /**
      * Is the operation permitted for the given level
+     *
      * @param level
      */
     private boolean authorize(IUserManager userManager, UserLevel level, HttpServletRequest request) {

@@ -25,7 +25,6 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
-import javax.xml.bind.JAXBElement;
 
 import org.codehaus.enunciate.jaxrs.ResponseCode;
 import org.codehaus.enunciate.jaxrs.StatusCodes;
@@ -37,6 +36,7 @@ import org.opendaylight.controller.northbound.commons.exception.UnauthorizedExce
 import org.opendaylight.controller.northbound.commons.utils.NorthboundUtils;
 import org.opendaylight.controller.sal.authorization.Privilege;
 import org.opendaylight.controller.sal.core.Edge;
+import org.opendaylight.controller.sal.core.NodeConnector;
 import org.opendaylight.controller.sal.core.Property;
 import org.opendaylight.controller.sal.utils.ServiceHelper;
 import org.opendaylight.controller.sal.utils.Status;
@@ -62,7 +62,9 @@ public class TopologyNorthboundJAXRS {
 
     @Context
     public void setSecurityContext(SecurityContext context) {
-        if (context != null && context.getUserPrincipal() != null) username = context.getUserPrincipal().getName();
+        if (context != null && context.getUserPrincipal() != null) {
+            username = context.getUserPrincipal().getName();
+        }
     }
 
     protected String getUserName() {
@@ -84,10 +86,10 @@ public class TopologyNorthboundJAXRS {
      *
      * Example:
      *
-     * RequestURL:
+     * Request URL:
      * http://localhost:8080/controller/nb/v2/topology/default
      *
-     * Response in XML:
+     * Response body in XML:
      * &lt;?xml version="1.0" encoding="UTF-8" standalone="yes"?&gt;
      * &lt;topology&gt;
      *     &lt;edgeProperties&gt;
@@ -162,14 +164,75 @@ public class TopologyNorthboundJAXRS {
      *     &lt;/edgeProperties&gt;
      * &lt;/topology&gt;
      *
-     * Response in JSON:
-     * {"edgeProperties":[{"edge":{"tailNodeConnector":{"node":{"id":"00:00:00:00:00:00:00:02","type":"OF"},
-     * "id":"2","type":"OF"},"headNodeConnector":{"node":{"id":"00:00:00:00:00:00:00:51","type":"OF"},"id":
-     * "2","type":"OF"}},"properties":{"timeStamp":{"value":"1377278961017","name":"creation"}}},
-     * {"edge":{"tailNodeConnector":{"node":{"id":"00:00:00:00:00:00:00:51","type":"OF"},"id":
-     * "2","type":"OF"}},"headNodeConnector":{"node":{"id":"00:00:00:00:00:00:00:02","type":"OF"},
-     * "id":"2","type":"OF"}},"properties":{"timeStamp":{"value":"1377278961018","name":"creation"}}}]}
-     *
+     * Response body in JSON:
+     * {
+     *    "edgeProperties":[
+     *       {
+     *          "edge":{
+     *             "tailNodeConnector":{
+     *                "node":{
+     *                   "id":"00:00:00:00:00:00:00:02",
+     *                   "type":"OF"
+     *                },
+     *                "id":"2",
+     *                "type":"OF"
+     *             },
+     *             "headNodeConnector":{
+     *                "node":{
+     *                   "id":"00:00:00:00:00:00:00:51",
+     *                   "type":"OF"
+     *                },
+     *                "id":"2",
+     *                "type":"OF"
+     *             }
+     *          },
+     *          "properties":{
+     *             "timeStamp": {
+     *                "value": 1379527162648,
+     *                "name": "creation",
+     *             },
+     *             "name": {
+     *                "value": "s2-eth3"
+     *             },
+     *             "state": {
+     *                "value": 1
+     *             },
+     *             "config": {
+     *                "value": 1
+     *             },
+     *             "bandwidth": {
+     *                "value": 10000000000
+     *             }
+     *          }
+     *       },
+     *       {
+     *          "edge":{
+     *             "tailNodeConnector":{
+     *                "node":{
+     *                   "id":"00:00:00:00:00:00:00:51",
+     *                   "type":"OF"
+     *                },
+     *                "id":"2",
+     *                "type":"OF"
+     *             },
+     *             "headNodeConnector":{
+     *                "node":{
+     *                   "id":"00:00:00:00:00:00:00:02",
+     *                   "type":"OF"
+     *                },
+     *                "id":"2",
+     *                "type":"OF"
+     *             }
+     *           },
+     *           "properties":{
+     *             "timeStamp": {
+     *                "value": 1379527162648,
+     *                "name": "creation",
+     *             }
+     *          }
+     *        }
+     *     ]
+     *  }
      * </pre>
      */
     @Path("/{containerName}")
@@ -179,17 +242,14 @@ public class TopologyNorthboundJAXRS {
     @StatusCodes({ @ResponseCode(code = 404, condition = "The Container Name was not found") })
     public Topology getTopology(@PathParam("containerName") String containerName) {
 
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.READ, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.READ, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
-        ITopologyManager topologyManager = (ITopologyManager) ServiceHelper
-                .getInstance(ITopologyManager.class, containerName, this);
+        ITopologyManager topologyManager = (ITopologyManager) ServiceHelper.getInstance(ITopologyManager.class,
+                containerName, this);
         if (topologyManager == null) {
-            throw new ResourceNotFoundException(
-                    RestMessages.NOCONTAINER.toString());
+            throw new ResourceNotFoundException(RestMessages.NOCONTAINER.toString());
         }
 
         Map<Edge, Set<Property>> topo = topologyManager.getEdges();
@@ -209,31 +269,40 @@ public class TopologyNorthboundJAXRS {
      * Retrieve the user configured links
      *
      * @param containerName
-     *            The container for which we want to retrieve the user links (Eg. 'default')
+     *            The container for which we want to retrieve the user links
+     *            (Eg. 'default')
      *
      * @return A List of user configured links
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
-     * RequestURL:
+     * Request URL:
      * http://localhost:8080/controller/nb/v2/topology/default/userLinks
      *
-     * Response in XML:
+     * Response body in XML:
      * &lt;?xml version="1.0" encoding="UTF-8" standalone="yes"?&gt;
-     * &lt;topologyUserLinks&gt;
+     * &lt;list&gt;
      * &lt;userLinks&gt;
      * &lt;status&gt;Success&lt;/status&gt;
      * &lt;name&gt;link1&lt;/name&gt;
      * &lt;srcNodeConnector&gt;OF|2@OF|00:00:00:00:00:00:00:02&lt;/srcNodeConnector&gt;
      * &lt;dstNodeConnector&gt;OF|2@OF|00:00:00:00:00:00:00:51&lt;/dstNodeConnector&gt;
      * &lt;/userLinks&gt;
-     * &lt;/topologyUserLinks&gt;
+     * &lt;/list&gt;
      *
-     * Response in JSON:
-     * {"userLinks":{"status":"Success","name":"link1","srcNodeConnector":
-     * "OF|2@OF|00:00:00:00:00:00:00:02","dstNodeConnector":"OF|2@OF|00:00:00:00:00:00:00:51"}}
+     * Response body in JSON:
+    * {
+     *   "userLinks": [
+     *    {
+     *      "status": "Success",
+     *      "name": "link1",
+     *      "srcNodeConnector": "OF|2@OF|00:00:00:00:00:00:00:02",
+     *      "dstNodeConnector": "OF|5@OF|00:00:00:00:00:00:00:05"
+     *    }
+     *  ]
+     * }
      *
      * </pre>
      */
@@ -242,27 +311,21 @@ public class TopologyNorthboundJAXRS {
     @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @TypeHint(TopologyUserLinks.class)
     @StatusCodes({ @ResponseCode(code = 404, condition = "The Container Name was not found") })
-    public TopologyUserLinks getUserLinks(
-            @PathParam("containerName") String containerName) {
+    public TopologyUserLinks getUserLinks(@PathParam("containerName") String containerName) {
 
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.READ, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.READ, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
-        ITopologyManager topologyManager = (ITopologyManager) ServiceHelper
-                .getInstance(ITopologyManager.class, containerName, this);
+        ITopologyManager topologyManager = (ITopologyManager) ServiceHelper.getInstance(ITopologyManager.class,
+                containerName, this);
         if (topologyManager == null) {
-            throw new ResourceNotFoundException(
-                    RestMessages.NOCONTAINER.toString());
+            throw new ResourceNotFoundException(RestMessages.NOCONTAINER.toString());
         }
 
-        ConcurrentMap<String, TopologyUserLinkConfig> userLinks = topologyManager
-                .getUserLinks();
+        ConcurrentMap<String, TopologyUserLinkConfig> userLinks = topologyManager.getUserLinks();
         if ((userLinks != null) && (userLinks.values() != null)) {
-            List<TopologyUserLinkConfig> res = new ArrayList<TopologyUserLinkConfig>(
-                    userLinks.values());
+            List<TopologyUserLinkConfig> res = new ArrayList<TopologyUserLinkConfig>(userLinks.values());
             return new TopologyUserLinks(res);
         }
 
@@ -280,24 +343,29 @@ public class TopologyNorthboundJAXRS {
      *            in JSON or XML format
      * @return Response as dictated by the HTTP Response Status code
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
-     * RequestURL:
+     * Request URL:
      * http://localhost:8080/controller/nb/v2/topology/default/userLink/link1
      *
-     * Request in XML:
+     * Request body in XML:
      * &lt;?xml version="1.0" encoding="UTF-8" standalone="yes"?&gt;
-     * &lt;topologyUserLinks&gt;
+     * &lt;topologyUserLinkConfig&gt;
      * &lt;status&gt;Success&lt;/status&gt;
      * &lt;name&gt;link1&lt;/name&gt;
      * &lt;srcNodeConnector&gt;OF|2@OF|00:00:00:00:00:00:00:02&lt;/srcNodeConnector&gt;
      * &lt;dstNodeConnector&gt;OF|2@OF|00:00:00:00:00:00:00:51&lt;/dstNodeConnector&gt;
-     * &lt;/topologyUserLinks&gt;
+     * &lt;/topologyUserLinkConfig&gt;
      *
-     * Request in JSON:
-     * {"status":"Success","name":"link1","srcNodeConnector":"OF|2@OF|00:00:00:00:00:00:00:02","dstNodeConnector":"OF|2@OF|00:00:00:00:00:00:00:51"}
+     * Request body in JSON:
+     * {
+     *    "status":"Success",
+     *    "name":"link1",
+     *    "srcNodeConnector":"OF|2@OF|00:00:00:00:00:00:00:02",
+     *    "dstNodeConnector":"OF|2@OF|00:00:00:00:00:00:00:51"
+     * }
      *
      * </pre>
      */
@@ -306,32 +374,34 @@ public class TopologyNorthboundJAXRS {
     @Consumes({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @StatusCodes({
-            @ResponseCode(code = 201, condition = "User Link added successfully"),
-            @ResponseCode(code = 404, condition = "The Container Name was not found"),
-            @ResponseCode(code = 409, condition = "Failed to add User Link due to Conflicting Name"),
-            @ResponseCode(code = 500, condition = "Failed to add User Link. Failure Reason included in HTTP Error response"),
-            @ResponseCode(code = 503, condition = "One or more of Controller services are unavailable") })
-    public Response addUserLink(
-            @PathParam(value = "containerName") String containerName,
+        @ResponseCode(code = 201, condition = "User Link added successfully"),
+        @ResponseCode(code = 404, condition = "The Container Name was not found"),
+        @ResponseCode(code = 409, condition = "Failed to add User Link due to Conflicting Name"),
+        @ResponseCode(code = 500, condition = "Failed to add User Link. Failure Reason included in HTTP Error response"),
+        @ResponseCode(code = 503, condition = "One or more of Controller services are unavailable") })
+    public Response addUserLink(@PathParam(value = "containerName") String containerName,
             @PathParam(value = "name") String name,
             @TypeHint(TopologyUserLinkConfig.class) TopologyUserLinkConfig userLinkConfig) {
 
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.WRITE, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.WRITE, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
-        ITopologyManager topologyManager = (ITopologyManager) ServiceHelper
-                .getInstance(ITopologyManager.class, containerName, this);
+        ITopologyManager topologyManager = (ITopologyManager) ServiceHelper.getInstance(ITopologyManager.class,
+                containerName, this);
         if (topologyManager == null) {
-            throw new ResourceNotFoundException(
-                    RestMessages.NOCONTAINER.toString());
+            throw new ResourceNotFoundException(RestMessages.NOCONTAINER.toString());
         }
 
         Status status = topologyManager.addUserLink(userLinkConfig);
         if (status.isSuccess()) {
-            NorthboundUtils.auditlog("User Link", username, "added", userLinkConfig.getName(), containerName);
+            NorthboundUtils
+            .auditlog(
+                    "User Link",username,"added", userLinkConfig.getName() + " from " + NorthboundUtils.getPortName(
+                            NodeConnector.fromString(userLinkConfig.getSrcNodeConnector()),
+                            containerName, this) + " to "
+                            + NorthboundUtils.getPortName(NodeConnector.fromString
+                                    (userLinkConfig.getDstNodeConnector()),containerName, this), containerName);
             return Response.status(Response.Status.CREATED).build();
         }
         throw new InternalServerErrorException(status.getDescription());
@@ -346,11 +416,11 @@ public class TopologyNorthboundJAXRS {
      *            Name of the Link Configuration (Eg. 'config1')
      * @return Response as dictated by the HTTP Response Status code
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
-     * RequestURL:
+     * Request URL:
      * http://localhost:8080/controller/nb/v2/topology/default/userLink/config1
      *
      * </pre>
@@ -359,25 +429,19 @@ public class TopologyNorthboundJAXRS {
     @DELETE
     @Consumes({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
-    @StatusCodes({
-            @ResponseCode(code = 204, condition = "User link removed successfully"),
-            @ResponseCode(code = 404, condition = "The Container Name or Link Configuration Name was not found"),
-            @ResponseCode(code = 503, condition = "One or more of Controller services are unavailable") })
-    public Response deleteUserLink(
-            @PathParam("containerName") String containerName,
-            @PathParam("name") String name) {
+    @StatusCodes({ @ResponseCode(code = 204, condition = "User link removed successfully"),
+        @ResponseCode(code = 404, condition = "The Container Name or Link Configuration Name was not found"),
+        @ResponseCode(code = 503, condition = "One or more of Controller services are unavailable") })
+    public Response deleteUserLink(@PathParam("containerName") String containerName, @PathParam("name") String name) {
 
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.WRITE, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.WRITE, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
-        ITopologyManager topologyManager = (ITopologyManager) ServiceHelper
-                .getInstance(ITopologyManager.class, containerName, this);
+        ITopologyManager topologyManager = (ITopologyManager) ServiceHelper.getInstance(ITopologyManager.class,
+                containerName, this);
         if (topologyManager == null) {
-            throw new ResourceNotFoundException(
-                    RestMessages.NOCONTAINER.toString());
+            throw new ResourceNotFoundException(RestMessages.NOCONTAINER.toString());
         }
 
         Status ret = topologyManager.deleteUserLink(name);

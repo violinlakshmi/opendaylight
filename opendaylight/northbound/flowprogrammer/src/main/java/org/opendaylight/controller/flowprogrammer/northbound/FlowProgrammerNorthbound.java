@@ -23,7 +23,6 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
-import javax.xml.bind.JAXBElement;
 
 import org.codehaus.enunciate.jaxrs.ResponseCode;
 import org.codehaus.enunciate.jaxrs.StatusCodes;
@@ -66,20 +65,20 @@ public class FlowProgrammerNorthbound {
 
     @Context
     public void setSecurityContext(SecurityContext context) {
-        if (context != null && context.getUserPrincipal() != null) username = context.getUserPrincipal().getName();
+        if (context != null && context.getUserPrincipal() != null) {
+            username = context.getUserPrincipal().getName();
+        }
     }
 
     protected String getUserName() {
         return username;
     }
 
-    private IForwardingRulesManager getForwardingRulesManagerService(
-            String containerName) {
-        IContainerManager containerManager = (IContainerManager) ServiceHelper
-                .getGlobalInstance(IContainerManager.class, this);
+    private IForwardingRulesManager getForwardingRulesManagerService(String containerName) {
+        IContainerManager containerManager = (IContainerManager) ServiceHelper.getGlobalInstance(
+                IContainerManager.class, this);
         if (containerManager == null) {
-            throw new ServiceUnavailableException("Container "
-                    + RestMessages.SERVICEUNAVAILABLE.toString());
+            throw new ServiceUnavailableException("Container " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         boolean found = false;
@@ -91,28 +90,24 @@ public class FlowProgrammerNorthbound {
         }
 
         if (found == false) {
-            throw new ResourceNotFoundException(containerName + " "
-                    + RestMessages.NOCONTAINER.toString());
+            throw new ResourceNotFoundException(containerName + " " + RestMessages.NOCONTAINER.toString());
         }
 
-        IForwardingRulesManager frm = (IForwardingRulesManager) ServiceHelper
-                .getInstance(IForwardingRulesManager.class, containerName, this);
+        IForwardingRulesManager frm = (IForwardingRulesManager) ServiceHelper.getInstance(
+                IForwardingRulesManager.class, containerName, this);
 
         if (frm == null) {
-            throw new ServiceUnavailableException("Flow Programmer "
-                    + RestMessages.SERVICEUNAVAILABLE.toString());
+            throw new ServiceUnavailableException("Flow Programmer " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         return frm;
     }
 
-    private List<FlowConfig> getStaticFlowsInternal(String containerName,
-            Node node) {
+    private List<FlowConfig> getStaticFlowsInternal(String containerName, Node node) {
         IForwardingRulesManager frm = getForwardingRulesManagerService(containerName);
 
         if (frm == null) {
-            throw new ServiceUnavailableException("Flow Programmer "
-                    + RestMessages.SERVICEUNAVAILABLE.toString());
+            throw new ServiceUnavailableException("Flow Programmer " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         List<FlowConfig> flows = new ArrayList<FlowConfig>();
@@ -122,17 +117,14 @@ public class FlowProgrammerNorthbound {
                 flows.add(flow);
             }
         } else {
-            ISwitchManager sm = (ISwitchManager) ServiceHelper.getInstance(
-                    ISwitchManager.class, containerName, this);
+            ISwitchManager sm = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName, this);
 
             if (sm == null) {
-                throw new ServiceUnavailableException("Switch Manager "
-                        + RestMessages.SERVICEUNAVAILABLE.toString());
+                throw new ServiceUnavailableException("Switch Manager " + RestMessages.SERVICEUNAVAILABLE.toString());
             }
 
             if (!sm.getNodes().contains(node)) {
-                throw new ResourceNotFoundException(node.toString() + " : "
-                        + RestMessages.NONODE.toString());
+                throw new ResourceNotFoundException(node.toString() + " : " + RestMessages.NONODE.toString());
             }
 
             for (FlowConfig flow : frm.getStaticFlows(node)) {
@@ -149,14 +141,14 @@ public class FlowProgrammerNorthbound {
      *            Name of the Container (Eg. 'default')
      * @return List of flows configured on a given container
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
-     * RequestURL:
+     * Request URL:
      * http://localhost:8080/controller/nb/v2/flowprogrammer/default
      *
-     * Response in XML:
+     * Response body in XML:
      * &lt;?xml version="1.0" encoding="UTF-8" standalone="yes"?&gt;
      * &lt;list&gt;
      *     &#x20;&#x20;&#x20;&lt;flowConfig&gt;
@@ -174,32 +166,43 @@ public class FlowProgrammerNorthbound {
      *     &#x20;&#x20;&#x20;&lt;/flowConfig&gt;
      * &lt;/list&gt;
      *
-     * Response in JSON:
-     * {"flowConfig":{"installInHw":"true","name":"flow1","node":{"id":"00:00:00:00:00:00:00:01","type":"OF"},
-     * "ingressPort":"1","priority":"500","etherType":"0x800","nwSrc":"9.9.1.1","actions":"OUTPUT=2"}}
-     *
+     * Response body in JSON:
+     * {
+     *   "flowConfig": [
+     *      {
+     *         "installInHw": "true",
+     *         "name": "flow1",
+     *         "node": {
+     *            "type": "OF",
+     *            "id": "00:00:00:00:00:00:00:01"
+     *         },
+     *         "ingressPort": "1",
+     *         "priority": "500",
+     *         "etherType": "0x800",
+     *         "nwSrc":"9.9.1.1",
+     *         "actions": [
+     *           "OUTPUT=2"
+     *         ]
+     *      }
+     *    ]
+     * }
      * </pre>
      */
     @Path("/{containerName}")
     @GET
     @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @TypeHint(FlowConfigs.class)
-    @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The containerName is not found"),
-            @ResponseCode(code = 503, condition = "One or more of Controller Services are unavailable") })
-    public FlowConfigs getStaticFlows(
-            @PathParam("containerName") String containerName) {
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.READ, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+    @StatusCodes({ @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 404, condition = "The containerName is not found"),
+        @ResponseCode(code = 503, condition = "One or more of Controller Services are unavailable") })
+    public FlowConfigs getStaticFlows(@PathParam("containerName") String containerName) {
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.READ, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
 
-        List<FlowConfig> flowConfigs = getStaticFlowsInternal(containerName,
-                null);
+        List<FlowConfig> flowConfigs = getStaticFlowsInternal(containerName, null);
         return new FlowConfigs(flowConfigs);
     }
 
@@ -214,14 +217,14 @@ public class FlowProgrammerNorthbound {
      *            Node Identifier (Eg. '00:00:00:00:00:00:00:01')
      * @return List of flows configured on a Node in a container
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
-     * RequestURL:
+     * Request URL:
      * http://localhost:8080/controller/nb/v2/flowprogrammer/default/node/OF/00:00:00:00:00:00:00:01
      *
-     * Response in XML:
+     * Response body in XML:
      * &lt;?xml version="1.0" encoding="UTF-8" standalone="yes"?&gt;
      * &lt;list&gt;
      *     &#x20;&#x20;&#x20;&lt;flowConfig&gt;
@@ -239,35 +242,45 @@ public class FlowProgrammerNorthbound {
      *     &#x20;&#x20;&#x20;&lt;/flowConfig&gt;
      * &lt;/list&gt;
      *
-     * Response in JSON:
-     * {"flowConfig":{"installInHw":"true","name":"flow1","node":{"id":"00:00:00:00:00:00:00:01","type":"OF"},
-     * "ingressPort":"1","priority":"500","etherType":"0x800","nwSrc":"9.9.1.1","actions":"OUTPUT=2"}}
-     *
+    * Response body in JSON:
+     * {
+     *   "flowConfig": [
+     *      {
+     *         "installInHw": "true",
+     *         "name": "flow1",
+     *         "node": {
+     *            "type": "OF",
+     *            "id": "00:00:00:00:00:00:00:01"
+     *         },
+     *         "ingressPort": "1",
+     *         "priority": "500",
+     *         "etherType": "0x800",
+     *         "nwSrc":"9.9.1.1",
+     *         "actions": [
+     *           "OUTPUT=2"
+     *         ]
+     *       }
+     *    ]
+     * }
      * </pre>
      */
     @Path("/{containerName}/node/{nodeType}/{nodeId}")
     @GET
     @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @TypeHint(FlowConfigs.class)
-    @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The containerName or nodeId is not found"),
-            @ResponseCode(code = 503, condition = "One or more of Controller Services are unavailable") })
-    public FlowConfigs getStaticFlows(
-            @PathParam("containerName") String containerName,
-            @PathParam("nodeType") String nodeType,
-            @PathParam("nodeId") String nodeId) {
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.READ, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+    @StatusCodes({ @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 404, condition = "The containerName or nodeId is not found"),
+        @ResponseCode(code = 503, condition = "One or more of Controller Services are unavailable") })
+    public FlowConfigs getStaticFlows(@PathParam("containerName") String containerName,
+            @PathParam("nodeType") String nodeType, @PathParam("nodeId") String nodeId) {
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.READ, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
         Node node = Node.fromString(nodeType, nodeId);
         if (node == null) {
-            throw new ResourceNotFoundException(nodeId + " : "
-                    + RestMessages.NONODE.toString());
+            throw new ResourceNotFoundException(nodeId + " : " + RestMessages.NONODE.toString());
         }
         List<FlowConfig> flows = getStaticFlowsInternal(containerName, node);
         return new FlowConfigs(flows);
@@ -287,14 +300,14 @@ public class FlowProgrammerNorthbound {
      *            Human-readable name for the configured flow (Eg. 'Flow1')
      * @return Flow configuration matching the name and nodeId on a Container
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
-     * RequestURL:
+     * Request URL:
      * http://localhost:8080/controller/nb/v2/flowprogrammer/default/node/OF/00:00:00:00:00:00:00:01/staticFlow/flow1
      *
-     * Response in XML:
+     * Response body in XML:
      * &lt;?xml version="1.0" encoding="UTF-8" standalone="yes"?&gt;
      * &lt;flowConfig&gt;
      *     &#x20;&#x20;&#x20;&lt;installInHw&gt;true&lt;/installInHw&gt;
@@ -310,9 +323,22 @@ public class FlowProgrammerNorthbound {
      *     &#x20;&#x20;&#x20;&lt;actions&gt;OUTPUT=2&lt;/actions&gt;
      * &lt;/flowConfig&gt;
      *
-     * Response in JSON:
-     * {"installInHw":"true","name":"flow1","node":{"id":"00:00:00:00:00:00:00:01","type":"OF"},
-     * "ingressPort":"1","priority":"500","etherType":"0x800","nwSrc":"9.9.1.1","actions":"OUTPUT=2"}
+    * Response body in JSON:
+     * {
+     *    "installInHw":"true",
+     *    "name":"flow1",
+     *    "node":{
+     *       "id":"00:00:00:00:00:00:00:01",
+     *       "type":"OF"
+     *    },
+     *    "ingressPort":"1",
+     *    "priority":"500",
+     *    "etherType":"0x800",
+     *    "nwSrc":"9.9.1.1",
+     *    "actions":[
+     *       "OUTPUT=2"
+     *    ]
+     * }
      *
      * </pre>
      */
@@ -320,26 +346,20 @@ public class FlowProgrammerNorthbound {
     @GET
     @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @TypeHint(FlowConfig.class)
-    @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The containerName or NodeId or Configuration name is not found"),
-            @ResponseCode(code = 503, condition = "One or more of Controller Services are unavailable") })
-    public FlowConfig getStaticFlow(
-            @PathParam("containerName") String containerName,
-            @PathParam("nodeType") String nodeType,
-            @PathParam("nodeId") String nodeId, @PathParam("name") String name) {
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.READ, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+    @StatusCodes({ @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 404, condition = "The containerName or NodeId or Configuration name is not found"),
+        @ResponseCode(code = 503, condition = "One or more of Controller Services are unavailable") })
+    public FlowConfig getStaticFlow(@PathParam("containerName") String containerName,
+            @PathParam("nodeType") String nodeType, @PathParam("nodeId") String nodeId, @PathParam("name") String name) {
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.READ, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
         IForwardingRulesManager frm = getForwardingRulesManagerService(containerName);
 
         if (frm == null) {
-            throw new ServiceUnavailableException("Flow Programmer "
-                    + RestMessages.SERVICEUNAVAILABLE.toString());
+            throw new ServiceUnavailableException("Flow Programmer " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         Node node = handleNodeAvailability(containerName, nodeType, nodeId);
@@ -353,8 +373,8 @@ public class FlowProgrammerNorthbound {
     }
 
     /**
-     * Add a flow configuration. If a flow by the given name already
-     * exists, this method will respond with a non-successful status response.
+     * Add a flow configuration. If a flow by the given name already exists,
+     * this method will respond with a non-successful status response.
      *
      * @param containerName
      *            Name of the Container (Eg. 'default')
@@ -368,14 +388,14 @@ public class FlowProgrammerNorthbound {
      *            Flow Configuration in JSON or XML format
      * @return Response as dictated by the HTTP Response Status code
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
-     * RequestURL:
+     * Request URL:
      * http://localhost:8080/controller/nb/v2/flowprogrammer/default/node/OF/00:00:00:00:00:00:00:01/staticFlow/flow1
      *
-     * Request in XML:
+     * Request body in XML:
      * &lt;flowConfig&gt;
      *         &#x20;&#x20;&#x20;&lt;installInHw&gt;true&lt;/installInHw&gt;
      *         &#x20;&#x20;&#x20;&lt;name&gt;flow1&lt;/name&gt;
@@ -390,10 +410,22 @@ public class FlowProgrammerNorthbound {
      *         &#x20;&#x20;&#x20;&lt;actions&gt;OUTPUT=2&lt;/actions&gt;
      * &lt;/flowConfig&gt;
      *
-     * Request in JSON:
-     * {"installInHw":"true","name":"flow1","node":{"id":"00:00:00:00:00:00:00:01","type":"OF"},
-     * "ingressPort":"1","priority":"500","etherType":"0x800","nwSrc":"9.9.1.1","actions":"OUTPUT=2"}
-     *
+     * Request body in JSON:
+      * {
+     *    "installInHw":"true",
+     *    "name":"flow1",
+     *    "node":{
+     *       "id":"00:00:00:00:00:00:00:01",
+     *       "type":"OF"
+     *    },
+     *    "ingressPort":"1",
+     *    "priority":"500",
+     *    "etherType":"0x800",
+     *    "nwSrc":"9.9.1.1",
+     *    "actions":[
+     *       "OUTPUT=2"
+     *    ]
+     * }
      * </pre>
      */
 
@@ -401,26 +433,21 @@ public class FlowProgrammerNorthbound {
     @PUT
     @Consumes({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @StatusCodes({
-            @ResponseCode(code = 201, condition = "Flow Config processed successfully"),
-            @ResponseCode(code = 400, condition = "Failed to create Static Flow entry due to invalid flow configuration"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The Container Name or nodeId is not found"),
-            @ResponseCode(code = 406, condition = "Cannot operate on Default Container when other Containers are active"),
-            @ResponseCode(code = 409, condition = "Failed to create Static Flow entry due to Conflicting Name or configuration"),
-            @ResponseCode(code = 500, condition = "Failed to create Static Flow entry. Failure Reason included in HTTP Error response"),
-            @ResponseCode(code = 503, condition = "One or more of Controller services are unavailable") })
-    public Response addFlow(
-            @PathParam(value = "containerName") String containerName,
-            @PathParam(value = "name") String name,
-            @PathParam("nodeType") String nodeType,
-            @PathParam(value = "nodeId") String nodeId,
-            @TypeHint(FlowConfig.class) FlowConfig flowConfig) {
+        @ResponseCode(code = 201, condition = "Flow Config processed successfully"),
+        @ResponseCode(code = 400, condition = "Failed to create Static Flow entry due to invalid flow configuration"),
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 404, condition = "The Container Name or nodeId is not found"),
+        @ResponseCode(code = 406, condition = "Cannot operate on Default Container when other Containers are active"),
+        @ResponseCode(code = 409, condition = "Failed to create Static Flow entry due to Conflicting Name or configuration"),
+        @ResponseCode(code = 500, condition = "Failed to create Static Flow entry. Failure Reason included in HTTP Error response"),
+        @ResponseCode(code = 503, condition = "One or more of Controller services are unavailable") })
+    public Response addFlow(@PathParam(value = "containerName") String containerName,
+            @PathParam(value = "name") String name, @PathParam("nodeType") String nodeType,
+            @PathParam(value = "nodeId") String nodeId, @TypeHint(FlowConfig.class) FlowConfig flowConfig) {
 
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.WRITE, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.WRITE, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
 
         if (flowConfig.getNode() == null) {
@@ -434,22 +461,21 @@ public class FlowProgrammerNorthbound {
         IForwardingRulesManager frm = getForwardingRulesManagerService(containerName);
 
         if (frm == null) {
-            throw new ServiceUnavailableException("Flow Programmer "
-                    + RestMessages.SERVICEUNAVAILABLE.toString());
+            throw new ServiceUnavailableException("Flow Programmer " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         Node node = handleNodeAvailability(containerName, nodeType, nodeId);
 
         FlowConfig staticFlow = frm.getStaticFlow(name, node);
         if (staticFlow != null) {
-            throw new ResourceConflictException(name + " already exists."
-                    + RestMessages.RESOURCECONFLICT.toString());
+            throw new ResourceConflictException(name + " already exists." + RestMessages.RESOURCECONFLICT.toString());
         }
 
         Status status = frm.addStaticFlow(flowConfig);
 
         if (status.isSuccess()) {
-            NorthboundUtils.auditlog("Flow", username, "added", name, containerName);
+            NorthboundUtils.auditlog("Flow Entry", username, "added",
+                    name + " on Node " + NorthboundUtils.getNodeDesc(node, containerName, this), containerName);
             return Response.status(Response.Status.CREATED).entity("Success").build();
         }
         return NorthboundUtils.getResponse(status);
@@ -468,7 +494,7 @@ public class FlowProgrammerNorthbound {
      *            Name of the Static Flow configuration (Eg. 'Flow1')
      * @return Response as dictated by the HTTP Response code
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
@@ -482,44 +508,39 @@ public class FlowProgrammerNorthbound {
     @DELETE
     @Consumes({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @StatusCodes({
-            @ResponseCode(code = 204, condition = "Flow Config deleted successfully"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The Container Name or Node-id or Flow Name passed is not found"),
-            @ResponseCode(code = 406, condition = "Failed to delete Flow config due to invalid operation. Failure details included in HTTP Error response"),
-            @ResponseCode(code = 500, condition = "Failed to delete Flow config. Failure Reason included in HTTP Error response"),
-            @ResponseCode(code = 503, condition = "One or more of Controller service is unavailable") })
-    public Response deleteFlow(
-            @PathParam(value = "containerName") String containerName,
-            @PathParam(value = "name") String name,
-            @PathParam("nodeType") String nodeType,
+        @ResponseCode(code = 204, condition = "Flow Config deleted successfully"),
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 404, condition = "The Container Name or Node-id or Flow Name passed is not found"),
+        @ResponseCode(code = 406, condition = "Failed to delete Flow config due to invalid operation. Failure details included in HTTP Error response"),
+        @ResponseCode(code = 500, condition = "Failed to delete Flow config. Failure Reason included in HTTP Error response"),
+        @ResponseCode(code = 503, condition = "One or more of Controller service is unavailable") })
+    public Response deleteFlow(@PathParam(value = "containerName") String containerName,
+            @PathParam(value = "name") String name, @PathParam("nodeType") String nodeType,
             @PathParam(value = "nodeId") String nodeId) {
 
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.WRITE, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.WRITE, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
         handleDefaultDisabled(containerName);
 
         IForwardingRulesManager frm = getForwardingRulesManagerService(containerName);
 
         if (frm == null) {
-            throw new ServiceUnavailableException("Flow Programmer "
-                    + RestMessages.SERVICEUNAVAILABLE.toString());
+            throw new ServiceUnavailableException("Flow Programmer " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         Node node = handleNodeAvailability(containerName, nodeType, nodeId);
 
         FlowConfig staticFlow = frm.getStaticFlow(name, node);
         if (staticFlow == null) {
-            throw new ResourceNotFoundException(name + " : "
-                    + RestMessages.NOFLOW.toString());
+            throw new ResourceNotFoundException(name + " : " + RestMessages.NOFLOW.toString());
         }
 
         Status status = frm.removeStaticFlow(name, node);
         if (status.isSuccess()) {
-            NorthboundUtils.auditlog("Flow", username, "removed", name, containerName);
+            NorthboundUtils.auditlog("Flow Entry", username, "removed",
+                    name + " from Node " + NorthboundUtils.getNodeDesc(node, containerName, this), containerName);
             return Response.noContent().build();
         }
         return NorthboundUtils.getResponse(status);
@@ -538,7 +559,7 @@ public class FlowProgrammerNorthbound {
      *            Name of the Static Flow configuration (Eg. 'Flow1')
      * @return Response as dictated by the HTTP Response code
      *
-     * <pre>
+     *         <pre>
      *
      * Example:
      *
@@ -551,23 +572,19 @@ public class FlowProgrammerNorthbound {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @StatusCodes({
-            @ResponseCode(code = 200, condition = "Flow Config processed successfully"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The Container Name or Node-id or Flow Name passed is not found"),
-            @ResponseCode(code = 406, condition = "Failed to delete Flow config due to invalid operation. Failure details included in HTTP Error response"),
-            @ResponseCode(code = 500, condition = "Failed to delete Flow config. Failure Reason included in HTTP Error response"),
-            @ResponseCode(code = 503, condition = "One or more of Controller service is unavailable") })
-    public Response toggleFlow(
-            @PathParam(value = "containerName") String containerName,
-            @PathParam("nodeType") String nodeType,
-            @PathParam(value = "nodeId") String nodeId,
+        @ResponseCode(code = 200, condition = "Flow Config processed successfully"),
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 404, condition = "The Container Name or Node-id or Flow Name passed is not found"),
+        @ResponseCode(code = 406, condition = "Failed to delete Flow config due to invalid operation. Failure details included in HTTP Error response"),
+        @ResponseCode(code = 500, condition = "Failed to delete Flow config. Failure Reason included in HTTP Error response"),
+        @ResponseCode(code = 503, condition = "One or more of Controller service is unavailable") })
+    public Response toggleFlow(@PathParam(value = "containerName") String containerName,
+            @PathParam("nodeType") String nodeType, @PathParam(value = "nodeId") String nodeId,
             @PathParam(value = "name") String name) {
 
-        if (!NorthboundUtils.isAuthorized(
-                getUserName(), containerName, Privilege.WRITE, this)) {
-            throw new UnauthorizedException(
-                    "User is not authorized to perform this operation on container "
-                            + containerName);
+        if (!NorthboundUtils.isAuthorized(getUserName(), containerName, Privilege.WRITE, this)) {
+            throw new UnauthorizedException("User is not authorized to perform this operation on container "
+                    + containerName);
         }
 
         handleDefaultDisabled(containerName);
@@ -575,60 +592,51 @@ public class FlowProgrammerNorthbound {
         IForwardingRulesManager frm = getForwardingRulesManagerService(containerName);
 
         if (frm == null) {
-            throw new ServiceUnavailableException("Flow Programmer "
-                    + RestMessages.SERVICEUNAVAILABLE.toString());
+            throw new ServiceUnavailableException("Flow Programmer " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         Node node = handleNodeAvailability(containerName, nodeType, nodeId);
 
         FlowConfig staticFlow = frm.getStaticFlow(name, node);
         if (staticFlow == null) {
-            throw new ResourceNotFoundException(name + " : "
-                    + RestMessages.NOFLOW.toString());
+            throw new ResourceNotFoundException(name + " : " + RestMessages.NOFLOW.toString());
         }
 
         Status status = frm.toggleStaticFlowStatus(staticFlow);
         if (status.isSuccess()) {
-            NorthboundUtils.auditlog("Flow", username, "toggled", name, containerName);
+            NorthboundUtils.auditlog("Flow Entry", username, "toggled",
+                    name + " on Node " + NorthboundUtils.getNodeDesc(node, containerName, this), containerName);
         }
         return NorthboundUtils.getResponse(status);
     }
 
-    private Node handleNodeAvailability(String containerName, String nodeType,
-            String nodeId) {
+    private Node handleNodeAvailability(String containerName, String nodeType, String nodeId) {
 
         Node node = Node.fromString(nodeType, nodeId);
         if (node == null) {
-            throw new ResourceNotFoundException(nodeId + " : "
-                    + RestMessages.NONODE.toString());
+            throw new ResourceNotFoundException(nodeId + " : " + RestMessages.NONODE.toString());
         }
 
-        ISwitchManager sm = (ISwitchManager) ServiceHelper.getInstance(
-                ISwitchManager.class, containerName, this);
+        ISwitchManager sm = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName, this);
 
         if (sm == null) {
-            throw new ServiceUnavailableException("Switch Manager "
-                    + RestMessages.SERVICEUNAVAILABLE.toString());
+            throw new ServiceUnavailableException("Switch Manager " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         if (!sm.getNodes().contains(node)) {
-            throw new ResourceNotFoundException(node.toString() + " : "
-                    + RestMessages.NONODE.toString());
+            throw new ResourceNotFoundException(node.toString() + " : " + RestMessages.NONODE.toString());
         }
         return node;
     }
 
     private void handleDefaultDisabled(String containerName) {
-        IContainerManager containerManager = (IContainerManager) ServiceHelper
-                .getGlobalInstance(IContainerManager.class, this);
+        IContainerManager containerManager = (IContainerManager) ServiceHelper.getGlobalInstance(
+                IContainerManager.class, this);
         if (containerManager == null) {
-            throw new InternalServerErrorException(
-                    RestMessages.INTERNALERROR.toString());
+            throw new InternalServerErrorException(RestMessages.INTERNALERROR.toString());
         }
-        if (containerName.equals(GlobalConstants.DEFAULT.toString())
-                && containerManager.hasNonDefaultContainer()) {
-            throw new NotAcceptableException(
-                    RestMessages.DEFAULTDISABLED.toString());
+        if (containerName.equals(GlobalConstants.DEFAULT.toString()) && containerManager.hasNonDefaultContainer()) {
+            throw new NotAcceptableException(RestMessages.DEFAULTDISABLED.toString());
         }
     }
 

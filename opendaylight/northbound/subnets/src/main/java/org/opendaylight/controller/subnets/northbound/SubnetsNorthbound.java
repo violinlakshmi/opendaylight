@@ -7,7 +7,10 @@
  */
 package org.opendaylight.controller.subnets.northbound;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -34,6 +37,7 @@ import org.opendaylight.controller.northbound.commons.exception.ServiceUnavailab
 import org.opendaylight.controller.northbound.commons.exception.UnauthorizedException;
 import org.opendaylight.controller.northbound.commons.utils.NorthboundUtils;
 import org.opendaylight.controller.sal.authorization.Privilege;
+import org.opendaylight.controller.sal.core.NodeConnector;
 import org.opendaylight.controller.sal.utils.ServiceHelper;
 import org.opendaylight.controller.sal.utils.Status;
 import org.opendaylight.controller.switchmanager.ISwitchManager;
@@ -108,12 +112,14 @@ public class SubnetsNorthbound {
      *
      * @return a List of SubnetConfig
      *
-     *         <pre>
+     * <pre>
      * Example:
      *
-     * Request URL: http://localhost:8080/controller/nb/v2/subnetservice/default/subnets
+     * Request URL:
+     * http://localhost:8080/controller/nb/v2/subnetservice/default/subnets
      *
-     * Response in XML:
+     * Response body in XML:
+     * &lt;list&gt;
      * &lt;subnetConfig&gt;
      *    &lt;name&gt;marketingdepartment&lt;/name&gt;
      *    &lt;subnet&gt;30.31.54.254/24&lt;/subnet&gt;
@@ -121,28 +127,40 @@ public class SubnetsNorthbound {
      * &lt;subnetConfig&gt;
      *    &lt;name&gt;salesdepartment&lt;/name&gt;
      *    &lt;subnet&gt;20.18.1.254/16&lt;/subnet&gt;
-     *    &lt;nodeConnectors&gt;0F|11@OF|00:00:00:aa:bb:cc:dd:ee&gt;/nodeConnectors&gt;
-     *    &lt;nodeConnectors&gt;0F|13@OF|00:00:00:aa:bb:cc:dd:ee&gt;/nodeConnectors&gt;
+     *    &lt;nodeConnectors&gt;OF|11@OF|00:00:00:aa:bb:cc:dd:ee&lt;/nodeConnectors&gt;
+     *    &lt;nodeConnectors&gt;OF|13@OF|00:00:00:aa:bb:cc:dd:ee&lt;/nodeConnectors&gt;
      * &lt;/subnetConfig&gt;
+     * &lt;/list&gt;
+     * Response body in JSON:
+     * {
+     *   "subnetConfig": [
+     *     {
+     *       "name": "marketingdepartment",
+     *       "subnet": "30.31.54.254/24",
+     *       "nodeConnectors": [
+     *           "OF|04@OF|00:00:00:00:00:00:00:04",
+     *           "OF|07@OF|00:00:00:00:00:00:00:07"
+     *       ]
+     *     },
+     *     {
+     *       "name":"salesdepartment",
+     *       "subnet":"20.18.1.254/16",
+     *       "nodeConnectors": [
+     *            "OF|11@OF|00:00:00:aa:bb:cc:dd:ee",
+     *            "OF|13@OF|00:00:00:aa:bb:cc:dd:ee"
+     *        ]
+     *      }
+     *   ]
+     * }
      *
-     * Response in JSON:
-     * {
-     *  "name":"marketingdepartment",
-     *  "subnet":"30.31.54.254/24",
-     * }
-     * {
-     *  "name":"salesdepartment",
-     *  "subnet":"20.18.1.254/16",
-     *  "nodeConnectors":["0F|11@OF|00:00:00:aa:bb:cc:dd:ee", "0F|13@OF|00:00:00:aa:bb:cc:dd:ee"]
-     * }
      * </pre>
      */
     @Path("/{containerName}/subnets")
     @GET
     @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @StatusCodes({ @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The containerName passed was not found"),
-            @ResponseCode(code = 503, condition = "Service unavailable") })
+        @ResponseCode(code = 404, condition = "The containerName passed was not found"),
+        @ResponseCode(code = 503, condition = "Service unavailable") })
     @TypeHint(SubnetConfigs.class)
     public SubnetConfigs listSubnets(@PathParam("containerName") String containerName) {
 
@@ -151,7 +169,8 @@ public class SubnetsNorthbound {
             throw new UnauthorizedException("User is not authorized to perform this operation on container "
                     + containerName);
         }
-         ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName, this);
+        ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName,
+                this);
         if (switchManager == null) {
             throw new ServiceUnavailableException("SwitchManager " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
@@ -171,21 +190,25 @@ public class SubnetsNorthbound {
      *         <pre>
      * Example:
      *
-     * Request URL: http://localhost:8080/controller/nb/v2/subnetservice/default/subnet/marketingdepartment
+     * Request URL:
+     * http://localhost:8080/controller/nb/v2/subnetservice/default/subnet/marketingdepartment
      *
-     * Response in XML:
+     * Response body in XML:
      * &lt;subnetConfig&gt;
      *    &lt;name&gt;marketingdepartment&lt;/name&gt;
      *    &lt;subnet&gt;30.0.0.1/24&lt;/subnet&gt;
-     *    &lt;nodeConnectors&gt;0F|1@OF|00:00:11:22:33:44:55:66&gt;/nodePorts&gt;
-     *    &lt;nodeConnectors&gt;0F|3@OF|00:00:11:22:33:44:55:66&gt;/nodePorts&gt;
+     *    &lt;nodeConnectors&gt;OF|1@OF|00:00:00:00:00:00:00:01&lt;/nodePorts&gt;
+     *    &lt;nodeConnectors&gt;OF|3@OF|00:00:00:00:00:00:00:03&lt;/nodePorts&gt;
      * &lt;/subnetConfig&gt;
      *
-     * Response in JSON:
+     * Response body in JSON:
      * {
      *  "name":"marketingdepartment",
      *  "subnet":"30.0.0.1/24",
-     *  "nodeConnectors":["0F|1@OF|00:00:11:22:33:44:55:66", "0F|3@OF|00:00:11:22:33:44:55:66"]
+     *  "nodeConnectors":[
+     *       "OF|1@OF|00:00:00:00:00:00:00:01",
+     *       "OF|3@OF|00:00:00:00:00:00:00:03"
+     *   ]
      * }
      * </pre>
      */
@@ -193,8 +216,8 @@ public class SubnetsNorthbound {
     @GET
     @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @StatusCodes({ @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The containerName or subnetName passed was not found"),
-            @ResponseCode(code = 503, condition = "Service unavailable") })
+        @ResponseCode(code = 404, condition = "The containerName or subnetName passed was not found"),
+        @ResponseCode(code = 503, condition = "Service unavailable") })
     @TypeHint(SubnetConfig.class)
     public SubnetConfig listSubnet(@PathParam("containerName") String containerName,
             @PathParam("subnetName") String subnetName) {
@@ -205,7 +228,8 @@ public class SubnetsNorthbound {
             throw new UnauthorizedException("User is not authorized to perform this operation on container "
                     + containerName);
         }
-        ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName, this);
+        ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName,
+                this);
         if (switchManager == null) {
             throw new ServiceUnavailableException("SwitchManager " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
@@ -217,10 +241,12 @@ public class SubnetsNorthbound {
     }
 
     /**
-     * Add a subnet into the specified container context, node connectors are optional
+     * Add a subnet into the specified container context, node connectors are
+     * optional
      *
      * @param containerName
-     *            name of the container context in which the subnet needs to be added
+     *            name of the container context in which the subnet needs to be
+     *            added
      * @param subnetName
      *            name of new subnet to be added
      * @param subnetConfigData
@@ -231,21 +257,25 @@ public class SubnetsNorthbound {
      *         <pre>
      * Example:
      *
-     * Request URL: http://localhost:8080/controller/nb/v2/subnetservice/default/subnet/salesdepartment
+     * Request URL:
+     * http://localhost:8080/controller/nb/v2/subnetservice/default/subnet/salesdepartment
      *
-     * Request XML:
+     * Request body in XML:
      *  &lt;subnetConfig&gt;
      *      &lt;name&gt;salesdepartment&lt;/name&gt;
      *      &lt;subnet&gt;172.173.174.254/24&lt;/subnet&gt;
-     *      &lt;nodeConnectors&gt;0F|22@OF|00:00:11:22:33:44:55:66&gt;/nodeConnectors&gt;
-     *      &lt;nodeConnectors&gt;0F|39@OF|00:00:ab:cd:33:44:55:66&gt;/nodeConnectors&gt;
+     *      &lt;nodeConnectors&gt;OF|22@OF|00:00:11:22:33:44:55:66&lt;/nodeConnectors&gt;
+     *      &lt;nodeConnectors&gt;OF|39@OF|00:00:ab:cd:33:44:55:66&lt;/nodeConnectors&gt;
      *  &lt;/subnetConfig&gt;
      *
-     * Request in JSON:
+     * Request body in JSON:
      * {
      *  "name":"salesdepartment",
-     *  "subnet":"172.173.174.254/24"
-     *  "nodeConnectors":["0F|22@OF|00:00:11:22:33:44:55:66", "0F|39@OF|00:00:ab:cd:33:44:55:66"]
+     *  "subnet":"172.173.174.254/24",
+     *  "nodeConnectors":[
+     *       "OF|22@OF|00:00:11:22:33:44:55:66",
+     *       "OF|39@OF|00:00:ab:cd:33:44:55:66"
+     *       ]
      * }
      * </pre>
      */
@@ -253,15 +283,14 @@ public class SubnetsNorthbound {
     @Path("/{containerName}/subnet/{subnetName}")
     @PUT
     @StatusCodes({ @ResponseCode(code = 201, condition = "Subnet created successfully"),
-            @ResponseCode(code = 400, condition = "Invalid data passed"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 409, condition = "Subnet name in url conflicts with name in request body"),
-            @ResponseCode(code = 404, condition = "Container name passed was not found or subnet config is null"),
-            @ResponseCode(code = 500, condition = "Internal Server Error: Addition of subnet failed"),
-            @ResponseCode(code = 503, condition = "Service unavailable") })
+        @ResponseCode(code = 400, condition = "Invalid data passed"),
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 409, condition = "Subnet name in url conflicts with name in request body"),
+        @ResponseCode(code = 404, condition = "Container name passed was not found or subnet config is null"),
+        @ResponseCode(code = 500, condition = "Internal Server Error: Addition of subnet failed"),
+        @ResponseCode(code = 503, condition = "Service unavailable") })
     public Response addSubnet(@PathParam("containerName") String containerName,
-            @PathParam("subnetName") String subnetName,
-            @TypeHint(SubnetConfig.class) SubnetConfig subnetConfigData) {
+            @PathParam("subnetName") String subnetName, @TypeHint(SubnetConfig.class) SubnetConfig subnetConfigData) {
 
         handleContainerDoesNotExist(containerName);
 
@@ -272,13 +301,21 @@ public class SubnetsNorthbound {
         SubnetConfig cfgObject = subnetConfigData;
         handleNameMismatch(cfgObject.getName(), subnetName);
 
-        ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName, this);
+        ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName,
+                this);
         if (switchManager == null) {
             throw new ServiceUnavailableException("SwitchManager " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
         Status status = switchManager.addSubnet(cfgObject);
         if (status.isSuccess()) {
             NorthboundUtils.auditlog("Subnet Gateway", username, "added", subnetName, containerName);
+            if (subnetConfigData.getNodeConnectors() != null) {
+                for (NodeConnector port : subnetConfigData.getNodeConnectors()) {
+                    NorthboundUtils.auditlog("Port", getUserName(), "added",
+                            NorthboundUtils.getPortName(port, switchManager) + " to Subnet Gateway " + subnetName,
+                            containerName);
+                }
+            }
             return Response.status(Response.Status.CREATED).build();
         }
         return NorthboundUtils.getResponse(status);
@@ -293,19 +330,21 @@ public class SubnetsNorthbound {
      *            name of new subnet to be deleted
      * @return Response as dictated by the HTTP Response Status code
      *
-     *         <pre>
+     * <pre>
      * Example:
-     *            Request URL: http://localhost:8080/controller/nb/v2/subnetservice/default/subnet/engdepartment
+     *
+     * Request URL:
+     * http://localhost:8080/controller/nb/v2/subnetservice/default/subnet/engdepartment
      *
      * </pre>
      */
     @Path("/{containerName}/subnet/{subnetName}")
     @DELETE
     @StatusCodes({ @ResponseCode(code = 204, condition = "No Content"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 404, condition = "The containerName passed was not found"),
-            @ResponseCode(code = 500, condition = "Internal Server Error : Removal of subnet failed"),
-            @ResponseCode(code = 503, condition = "Service unavailable") })
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 404, condition = "The containerName passed was not found"),
+        @ResponseCode(code = 500, condition = "Internal Server Error : Removal of subnet failed"),
+        @ResponseCode(code = 503, condition = "Service unavailable") })
     public Response removeSubnet(@PathParam("containerName") String containerName,
             @PathParam("subnetName") String subnetName) {
 
@@ -316,7 +355,8 @@ public class SubnetsNorthbound {
                     + containerName);
         }
 
-        ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName, this);
+        ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName,
+                this);
         if (switchManager == null) {
             throw new ServiceUnavailableException("SwitchManager " + RestMessages.SERVICEUNAVAILABLE.toString());
         }
@@ -345,21 +385,25 @@ public class SubnetsNorthbound {
      *         <pre>
      * Example:
      *
-     * Request URL: http://localhost:8080/controller/nb/v2/subnetservice/default/subnet/salesdepartment
+     * Request URL:
+     * http://localhost:8080/controller/nb/v2/subnetservice/default/subnet/salesdepartment
      *
-     *  Request in XML:
+     *  Request body in XML:
      *  &lt;subnetConfig&gt;
      *      &lt;name&gt;salesdepartment&lt;/name&gt;
      *      &lt;subnet&gt;172.173.174.254/24&lt;/subnet&gt;
-     *      &lt;nodeConnectors&gt;0F|22@OF|00:00:11:22:33:44:55:66&gt;/nodeConnectors&gt;
-     *      &lt;nodeConnectors&gt;0F|39@OF|00:00:ab:cd:33:44:55:66&gt;/nodeConnectors&gt;
+     *      &lt;nodeConnectors&gt;OF|22@OF|00:00:11:22:33:44:55:66&lt;/nodeConnectors&gt;
+     *      &lt;nodeConnectors&gt;OF|39@OF|00:00:ab:cd:33:44:55:66&lt;/nodeConnectors&gt;
      *  &lt;/subnetConfig&gt;
      *
-     * Request in JSON:
+     * Request body in JSON:
      * {
      *  "name":"salesdepartment",
-     *  "subnet":"172.173.174.254/24"
-     *  "nodeConnectors":["0F|22@OF|00:00:11:22:33:44:55:66", "0F|39@OF|00:00:ab:cd:33:44:55:66"]
+     *  "subnet":"172.173.174.254/24",
+     *  "nodeConnectors":[
+     *      "OF|22@OF|00:00:11:22:33:44:55:66",
+     *      "OF|39@OF|00:00:ab:cd:33:44:55:66"
+     *  ]
      * }
      * </pre>
      */
@@ -367,11 +411,11 @@ public class SubnetsNorthbound {
     @POST
     @Consumes({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
     @StatusCodes({ @ResponseCode(code = 200, condition = "Configuration replaced successfully"),
-            @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
-            @ResponseCode(code = 409, condition = "Subnet name in url conflicts with name in request body"),
-            @ResponseCode(code = 404, condition = "The containerName or subnetName is not found"),
-            @ResponseCode(code = 500, condition = "Internal server error: Modify subnet failed"),
-            @ResponseCode(code = 503, condition = "Service unavailable") })
+        @ResponseCode(code = 401, condition = "User not authorized to perform this operation"),
+        @ResponseCode(code = 409, condition = "Subnet name in url conflicts with name in request body"),
+        @ResponseCode(code = 404, condition = "The containerName or subnetName is not found"),
+        @ResponseCode(code = 500, condition = "Internal server error: Modify subnet failed"),
+        @ResponseCode(code = 503, condition = "Service unavailable") })
     public Response modifySubnet(@Context UriInfo uriInfo, @PathParam("containerName") String containerName,
             @PathParam("subnetName") String subnetName, @TypeHint(SubnetConfig.class) SubnetConfig subnetConfigData) {
 
@@ -396,10 +440,38 @@ public class SubnetsNorthbound {
 
         if (status.isSuccess()) {
             if (existingConf == null) {
-                NorthboundUtils.auditlog("Subnet Gateway", username, "created", subnetName, containerName);
+                NorthboundUtils.auditlog("Subnet Gateway", username, "added", subnetName, containerName);
+                if (subnetConfigData.getNodeConnectors() != null) {
+                    for (NodeConnector port : subnetConfigData.getNodeConnectors()) {
+                        NorthboundUtils.auditlog("Port", getUserName(), "added",
+                                NorthboundUtils.getPortName(port, switchManager) + " to Subnet Gateway" + subnetName,
+                                containerName);
+                    }
+                }
                 return Response.created(uriInfo.getRequestUri()).build();
             } else {
-                NorthboundUtils.auditlog("Subnet Gateway", username, "modified", subnetName, containerName);
+                Set<NodeConnector> existingNCList = existingConf.getNodeConnectors();
+
+                if (existingNCList == null) {
+                    existingNCList = new HashSet<NodeConnector>(0);
+                }
+                if (subnetConfigData.getNodeConnectors() != null) {
+                    for (NodeConnector port : subnetConfigData.getNodeConnectors()) {
+                        if (!existingNCList.contains(port)) {
+                            NorthboundUtils.auditlog("Port", getUserName(), "added",
+                                    NorthboundUtils.getPortName(port, switchManager) + " to Subnet Gateway "
+                                            + subnetName, containerName);
+                        }
+                    }
+                }
+                for (NodeConnector port : existingNCList) {
+                    if (!subnetConfigData.getNodeConnectors().contains(port)) {
+                        NorthboundUtils
+                                .auditlog("Port", getUserName(), "removed",
+                                        NorthboundUtils.getPortName(port, switchManager) + " from Subnet Gateway "
+                                                + subnetName, containerName);
+                    }
+                }
             }
         }
         return NorthboundUtils.getResponse(status);

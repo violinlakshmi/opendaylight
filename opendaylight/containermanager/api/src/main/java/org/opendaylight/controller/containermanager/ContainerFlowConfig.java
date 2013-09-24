@@ -479,12 +479,12 @@ public class ContainerFlowConfig implements Serializable {
     }
 
     /**
-     * Returns the protocol
+     * Get the IP protocol value
      *
      * @return the protocol
      */
     public Short getProtoNum() {
-        return protocol == null ? IPProtocols.ANY.shortValue() : IPProtocols.getProtocolNumberShort(protocol);
+        return protocol == null ? null : IPProtocols.getProtocolNumberShort(protocol);
     }
 
     /**
@@ -528,6 +528,9 @@ public class ContainerFlowConfig implements Serializable {
         }
         if(!hasValidProtocol()) {
             return new Status(StatusCode.BADREQUEST, "Invalid IP protocol");
+        }
+        if (!hasValidPorts()) {
+            return new Status(StatusCode.BADREQUEST, "Invalid Source or Destination Port");
         }
         if (this.getMatches().get(0).getMatches() == 0) {
             return new Status(StatusCode.BADREQUEST, "Flow Spec is empty");
@@ -573,12 +576,53 @@ public class ContainerFlowConfig implements Serializable {
         return new Status(StatusCode.SUCCESS);
     }
 
+    /**
+     * Validate the protocol field. Either it can be a enum defined in IPProtocols.java
+     * or a valid IP proto value between 0 and 255, see:
+     * http://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml
+     * for more details.
+     *
+     * @return true if a valid protocol value
+     */
     private boolean hasValidProtocol() {
-        if (protocol != null && !protocol.isEmpty()) {
-            return (this.getProtoNum() != 0 || protocol.equalsIgnoreCase("any"));
+        IPProtocols p = IPProtocols.fromString(protocol);
+        return p != null;
+    }
+
+    /**
+     *
+     * @param tpPort
+     *               String representing the transport protocol port number
+     * @return true if tpPort contains a decimal value between 0 and 65535
+     */
+    private boolean hasValidPort(String tpPort) {
+        try {
+            int port = Integer.decode(tpPort);
+            return ((port >= 0) && (port <= 0xffff));
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Validate the transport protocol source and destination ports as
+     * entered by users.
+     *
+     * @return true if ports are defined and are in valid range
+     */
+    private boolean hasValidPorts() {
+        if (tpSrc !=null && !tpSrc.isEmpty()) {
+            if (!hasValidPort(tpSrc)) {
+                return false;
+            }
+        }
+
+        if (tpDst !=null && !tpDst.isEmpty()) {
+            return hasValidPort(tpDst);
         }
         return true;
     }
+
     /**
      * Returns the matches.
      * If unidirectional flag is set, there will be only one match in the list
@@ -619,27 +663,14 @@ public class ContainerFlowConfig implements Serializable {
             mask = NetUtils.getInetNetworkMask(maskLen, ip instanceof Inet6Address);
             match.setField(MatchType.NW_DST, ip, mask);
         }
-        if (this.protocol != null && !this.protocol.trim().isEmpty() && !this.protocol.equalsIgnoreCase("any")) {
-            match.setField(MatchType.NW_PROTO, IPProtocols
-                    .getProtocolNumberByte(this.protocol));
+        if (IPProtocols.fromString(this.protocol) != IPProtocols.ANY) {
+            match.setField(MatchType.NW_PROTO, IPProtocols.getProtocolNumberByte(this.protocol));
         }
         if (this.tpSrc != null && !this.tpSrc.trim().isEmpty()) {
-            Short srcPort = 0;
-            try {
-                srcPort = Short.parseShort(tpSrc);
-            } catch (NumberFormatException e) {
-                throw e;
-            }
-            match.setField(MatchType.TP_SRC, srcPort);
+            match.setField(MatchType.TP_SRC, Integer.valueOf(tpSrc).shortValue());
         }
         if (this.tpDst != null && !this.tpDst.trim().isEmpty()) {
-            Short dstPort = 0;
-            try {
-                dstPort = Short.parseShort(tpDst);
-            } catch (NumberFormatException e) {
-                throw e;
-            }
-            match.setField(MatchType.TP_DST, dstPort);
+            match.setField(MatchType.TP_DST, Integer.valueOf(tpDst).shortValue());
         }
 
         matches.add(match);

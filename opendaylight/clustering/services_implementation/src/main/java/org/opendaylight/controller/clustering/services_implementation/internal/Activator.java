@@ -10,7 +10,6 @@
 package org.opendaylight.controller.clustering.services_implementation.internal;
 
 import org.opendaylight.controller.sal.core.ComponentActivatorAbstractBase;
-import org.opendaylight.controller.sal.core.IContainerAware;
 
 import org.opendaylight.controller.clustering.services.ICacheUpdateAware;
 import org.opendaylight.controller.clustering.services.IClusterContainerServices;
@@ -25,24 +24,7 @@ public class Activator extends ComponentActivatorAbstractBase {
     protected static final Logger logger = LoggerFactory
             .getLogger(Activator.class);
 
-    /**
-     * Function called when the activator starts just after some
-     * initializations are done by the
-     * ComponentActivatorAbstractBase.
-     *
-     */
-    @Override
-    public void init() {
-    }
 
-    /**
-     * Function called when the activator stops just before the
-     * cleanup done by ComponentActivatorAbstractBase
-     *
-     */
-    @Override
-    public void destroy() {
-    }
 
     /**
      * Function that is used to communicate to dependency manager the
@@ -55,7 +37,7 @@ public class Activator extends ComponentActivatorAbstractBase {
      */
     @Override
     public Object[] getGlobalImplementations() {
-        Object[] res = { ClusterManager.class, ClusterGlobalManager.class };
+        Object[] res = { ClusterManager.class, ClusterGlobalManager.class, ClusterManagerCLI.class };
         return res;
     }
 
@@ -128,7 +110,7 @@ public class Activator extends ComponentActivatorAbstractBase {
     public void configureGlobalInstance(Component c, Object imp) {
         if (imp.equals(ClusterManager.class)) {
             // export the service for Apps and Plugins
-            c.setInterface(new String[] { IClusterServices.class.getName(), IContainerAware.class.getName() }, null);
+            c.setInterface(new String[] { IClusterServices.class.getName() }, null);
         }
 
         if (imp.equals(ClusterGlobalManager.class)) {
