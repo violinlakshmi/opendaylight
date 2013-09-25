@@ -56,4 +56,25 @@ public class ElementMapper {
     public List<WebElement> getAllTopologySwitch() {
         return getVisualTopologySvg().findElements(By.className("switch"));
     }
+
+    public WebElement getActiveModal() {
+        List<WebElement> allModals = driver.findElements(By.className("modal-header"));
+        for (WebElement modal : allModals) {
+            if(modal.isDisplayed()) {
+                return modal;
+            }
+        }
+        return null;
+    }
+    
+    public WebElement getActiveModalCloseButton() {
+        List<WebElement> allModals = driver.findElements(By.className("modal-header"));
+        for (WebElement modal : allModals) {
+            if(modal.isDisplayed()) {
+                return modal.findElement(By.className("close"));
+            }
+        }
+        return null;
+    }
+    
 }

@@ -20,8 +20,15 @@ public class DeviceHelper {
     }
 
     public void deleteAllStaticRoute() {
+        if(devicesElementMapper.getStaticRouteDashletTable().getText().contains("0 items")) {
+            return;
+        }
         devicesElementMapper.getDeleteAllStaticRoutesCheckBox().click();
         devicesElementMapper.getDeleteStaticRoutesButton().click();
-        devicesElementMapper.getStaticRoutesDeleteConfirmationButton().click();
+        if (devicesElementMapper.getStaticRoutesDeleteConfirmationButton().isDisplayed()) {
+            devicesElementMapper.getStaticRoutesDeleteConfirmationButton().click();
+        }
     }
+    
+    
 }
