@@ -31,17 +31,16 @@ import org.opendaylight.controller.clustering.services.CacheConfigException;
 import org.opendaylight.controller.clustering.services.CacheExistException;
 import org.opendaylight.controller.clustering.services.IClusterGlobalServices;
 import org.opendaylight.controller.clustering.services.IClusterServices;
+import org.opendaylight.controller.configuration.ConfigurationObject;
 import org.opendaylight.controller.configuration.IConfigurationAware;
+import org.opendaylight.controller.configuration.IConfigurationService;
 import org.opendaylight.controller.containermanager.IContainerAuthorization;
 import org.opendaylight.controller.sal.authorization.AuthResultEnum;
 import org.opendaylight.controller.sal.authorization.IResourceAuthorization;
 import org.opendaylight.controller.sal.authorization.UserLevel;
-import org.opendaylight.controller.sal.utils.StatusCode;
-import org.opendaylight.controller.sal.utils.GlobalConstants;
 import org.opendaylight.controller.sal.utils.IObjectReader;
-import org.opendaylight.controller.sal.utils.ObjectReader;
-import org.opendaylight.controller.sal.utils.ObjectWriter;
 import org.opendaylight.controller.sal.utils.Status;
+import org.opendaylight.controller.sal.utils.StatusCode;
 import org.opendaylight.controller.usermanager.AuthResponse;
 import org.opendaylight.controller.usermanager.AuthenticatedUser;
 import org.opendaylight.controller.usermanager.AuthorizationConfig;
@@ -52,7 +51,6 @@ import org.opendaylight.controller.usermanager.ServerConfig;
 import org.opendaylight.controller.usermanager.UserConfig;
 import org.opendaylight.controller.usermanager.security.SessionManager;
 import org.opendaylight.controller.usermanager.security.UserSecurityContextRepository;
-
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
 import org.slf4j.Logger;
@@ -77,11 +75,10 @@ public class UserManager implements IUserManager, IObjectReader,
     private static final String DEFAULT_ADMIN = "admin";
     private static final String DEFAULT_ADMIN_PASSWORD = "admin";
     private static final String DEFAULT_ADMIN_ROLE = UserLevel.NETWORKADMIN.toString();
-    private static final String ROOT = GlobalConstants.STARTUPHOME.toString();
-    private static final String USERS_FILE_NAME = ROOT + "users.conf";
-    private static final String SERVERS_FILE_NAME = ROOT + "servers.conf";
-    private static final String AUTH_FILE_NAME = ROOT + "authorization.conf";
-    private static final String RECOVERY_FILE = ROOT + "NETWORK_ADMIN_PASSWORD_RECOVERY";
+    private static final String USERS_FILE_NAME = "users.conf";
+    private static final String SERVERS_FILE_NAME = "servers.conf";
+    private static final String AUTH_FILE_NAME = "authorization.conf";
+    private static final String RECOVERY_FILE = "NETWORK_ADMIN_PASSWORD_RECOVERY";
     private ConcurrentMap<String, UserConfig> localUserConfigList;
     private ConcurrentMap<String, ServerConfig> remoteServerConfigList;
     // local authorization info for remotely authenticated users
@@ -89,10 +86,30 @@ public class UserManager implements IUserManager, IObjectReader,
     private ConcurrentMap<String, AuthenticatedUser> activeUsers;
     private ConcurrentMap<String, IAAAProvider> authProviders;
     private IClusterGlobalServices clusterGlobalService = null;
+    private IConfigurationService configurationService;
     private SecurityContextRepository securityContextRepo = new UserSecurityContextRepository();
     private IContainerAuthorization containerAuthorizationClient;
     private Set<IResourceAuthorization> applicationAuthorizationClients;
     private ISessionManager sessionMgr = new SessionManager();
+    protected enum Command {
+        ADD("add", "added"),
+        MODIFY("modify", "modified"),
+        REMOVE("remove", "removed");
+        private String action;
+        private String postAction;
+        private Command(String action, String postAction) {
+            this.action = action;
+            this.postAction = postAction;
+        }
+
+        public String getAction() {
+            return action;
+        }
+
+        public String getPostAction() {
+            return postAction;
+        }
+    }
 
     public boolean addAAAProvider(IAAAProvider provider) {
         if (provider == null || provider.getName() == null
@@ -183,20 +200,12 @@ public class UserManager implements IUserManager, IObjectReader,
     private void loadConfigurations() {
         // To encode and decode user and server configuration objects
         loadSecurityKeys();
-
         /*
-         * Do not load local startup file if we already got the configurations
-         * synced from another cluster node
+         * Do not load local startup file if we are not the coordinator
          */
-        if (localUserConfigList.isEmpty()) {
-            loadUserConfig();
-        }
-        if (remoteServerConfigList.isEmpty()) {
-            loadServerConfig();
-        }
-        if (authorizationConfList.isEmpty()) {
-            loadAuthConfig();
-        }
+        loadUserConfig();
+        loadServerConfig();
+        loadAuthConfig();
     }
 
     private void loadSecurityKeys() {
@@ -264,18 +273,18 @@ public class UserManager implements IUserManager, IObjectReader,
                 rcResponse = aaaClient.authService(userName, password,
                         aaaServer.getAddress(), aaaServer.getSecret());
                 if (rcResponse.getStatus() == AuthResultEnum.AUTH_ACCEPT) {
-                    logger.info(
+                    logger.trace(
                             "Remote Authentication Succeeded for User: \"{}\", by Server: {}",
                             userName, aaaServer.getAddress());
                     remotelyAuthenticated = true;
                     break;
                 } else if (rcResponse.getStatus() == AuthResultEnum.AUTH_REJECT) {
-                    logger.info(
+                    logger.trace(
                             "Remote Authentication Rejected User: \"{}\", from Server: {}, Reason:{}",
                             new Object[] { userName, aaaServer.getAddress(),
                                     rcResponse.getStatus().toString() });
                 } else {
-                    logger.info(
+                    logger.trace(
                             "Remote Authentication Failed for User: \"{}\", from Server: {}, Reason:{}",
                             new Object[] { userName, aaaServer.getAddress(),
                                     rcResponse.getStatus().toString() });
@@ -396,9 +405,8 @@ public class UserManager implements IUserManager, IObjectReader,
     }
 
     private Status saveLocalUserListInternal() {
-        ObjectWriter objWriter = new ObjectWriter();
-        return objWriter.write(new ConcurrentHashMap<String, UserConfig>(
-                localUserConfigList), USERS_FILE_NAME);
+        return configurationService.persistConfiguration(
+                new ArrayList<ConfigurationObject>(localUserConfigList.values()), USERS_FILE_NAME);
     }
 
     @Override
@@ -407,9 +415,8 @@ public class UserManager implements IUserManager, IObjectReader,
     }
 
     private Status saveAAAServerListInternal() {
-        ObjectWriter objWriter = new ObjectWriter();
-        return objWriter.write(new ConcurrentHashMap<String, ServerConfig>(
-                remoteServerConfigList), SERVERS_FILE_NAME);
+        return configurationService.persistConfiguration(
+                new ArrayList<ConfigurationObject>(remoteServerConfigList.values()), SERVERS_FILE_NAME);
     }
 
     @Override
@@ -418,10 +425,8 @@ public class UserManager implements IUserManager, IObjectReader,
     }
 
     private Status saveAuthorizationListInternal() {
-        ObjectWriter objWriter = new ObjectWriter();
-        return objWriter.write(
-                new ConcurrentHashMap<String, AuthorizationConfig>(
-                        authorizationConfList), AUTH_FILE_NAME);
+        return configurationService.persistConfiguration(
+                new ArrayList<ConfigurationObject>(authorizationConfList.values()), AUTH_FILE_NAME);
     }
 
     @Override
@@ -432,55 +437,28 @@ public class UserManager implements IUserManager, IObjectReader,
         return ois.readObject();
     }
 
-    @SuppressWarnings("unchecked")
     private void loadUserConfig() {
-        ObjectReader objReader = new ObjectReader();
-        ConcurrentMap<String, UserConfig> confList = (ConcurrentMap<String, UserConfig>) objReader
-                .read(this, USERS_FILE_NAME);
-
-        if (confList == null) {
-            return;
-        }
-
-        for (UserConfig conf : confList.values()) {
-            addRemoveLocalUserInternal(conf, false);
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, USERS_FILE_NAME)) {
+            addRemoveLocalUserInternal((UserConfig) conf, false);
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void loadServerConfig() {
-        ObjectReader objReader = new ObjectReader();
-        ConcurrentMap<String, ServerConfig> confList = (ConcurrentMap<String, ServerConfig>) objReader
-                .read(this, SERVERS_FILE_NAME);
-
-        if (confList == null) {
-            return;
-        }
-
-        for (ServerConfig conf : confList.values()) {
-            addAAAServer(conf);
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, SERVERS_FILE_NAME)) {
+            addAAAServer((ServerConfig) conf);
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void loadAuthConfig() {
-        ObjectReader objReader = new ObjectReader();
-        ConcurrentMap<String, AuthorizationConfig> confList = (ConcurrentMap<String, AuthorizationConfig>) objReader
-                .read(this, AUTH_FILE_NAME);
-
-        if (confList == null) {
-            return;
-        }
-
-        for (AuthorizationConfig conf : confList.values()) {
-            addAuthInfo(conf);
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, AUTH_FILE_NAME)) {
+            addAuthInfo((AuthorizationConfig) conf);
         }
     }
 
     /*
      * Interaction with GUI START
      */
-    private Status addRemoveLocalUser(UserConfig AAAconf, boolean delete) {
+    private Status changeLocalUser(UserConfig AAAconf, Command command) {
         // UserConfig Validation check
         Status validCheck = AAAconf.validate();
         if (!validCheck.isSuccess()) {
@@ -491,28 +469,51 @@ public class UserManager implements IUserManager, IObjectReader,
 
         // Check default admin user
         if (user.equals(UserManager.DEFAULT_ADMIN)) {
-            String msg = "Invalid Request: Default Network Admin  User cannot be " + ((delete)? "removed" : "added");
+            String msg = String.format("Invalid Request: Default Network Admin  User cannot be %s", command.getPostAction());
             logger.debug(msg);
             return new Status(StatusCode.NOTALLOWED, msg);
         }
 
         // Check user presence/conflict
+        UserConfig currentAAAconf = localUserConfigList.get(user);
         StatusCode statusCode = null;
         String reason = null;
-        if (delete && !localUserConfigList.containsKey(user)) {
-            reason = "not found";
-            statusCode = StatusCode.NOTFOUND;
-        } else if (!delete && localUserConfigList.containsKey(user)) {
-            reason = "already present";
-            statusCode = StatusCode.CONFLICT;
+        switch (command) {
+        case ADD:
+            if (currentAAAconf != null) {
+                reason = "already present";
+                statusCode = StatusCode.CONFLICT;
+            }
+            break;
+        case MODIFY:
+        case REMOVE:
+            if (currentAAAconf == null) {
+                reason = "not found";
+                statusCode = StatusCode.NOTFOUND;
+            }
+            break;
+        default:
+            break;
+
         }
         if (statusCode != null) {
+            String action = String.format("Failed to %s user %s: ", command.getAction(), user);
             String msg = String.format("User %s %s in configuration database", user, reason);
-            logger.debug(msg);
+            logger.debug(action + msg);
             return new Status(statusCode, msg);
         }
 
-        return addRemoveLocalUserInternal(AAAconf, delete);
+        switch (command) {
+        case ADD:
+            return addRemoveLocalUserInternal(AAAconf, false);
+        case MODIFY:
+            addRemoveLocalUserInternal(currentAAAconf, true);
+            return addRemoveLocalUserInternal(AAAconf, false);
+        case REMOVE:
+            return addRemoveLocalUserInternal(AAAconf, true);
+        default:
+            return new Status(StatusCode.INTERNALERROR, "Unknown action");
+        }
     }
 
     private Status addRemoveLocalUserInternal(UserConfig AAAconf, boolean delete) {
@@ -571,12 +572,17 @@ public class UserManager implements IUserManager, IObjectReader,
 
     @Override
     public Status addLocalUser(UserConfig AAAconf) {
-        return addRemoveLocalUser(AAAconf, false);
+        return changeLocalUser(AAAconf, Command.ADD);
+    }
+
+    @Override
+    public Status modifyLocalUser(UserConfig AAAconf) {
+        return changeLocalUser(AAAconf, Command.MODIFY);
     }
 
     @Override
     public Status removeLocalUser(UserConfig AAAconf) {
-        return addRemoveLocalUser(AAAconf, true);
+        return changeLocalUser(AAAconf, Command.REMOVE);
     }
 
     @Override
@@ -589,7 +595,7 @@ public class UserManager implements IUserManager, IObjectReader,
             return new Status(StatusCode.NOTFOUND, "User does not exist");
         }
 
-        return addRemoveLocalUser(localUserConfigList.get(userName), true);
+        return changeLocalUser(localUserConfigList.get(userName), Command.REMOVE);
     }
 
     @Override
@@ -644,7 +650,7 @@ public class UserManager implements IUserManager, IObjectReader,
         // Trigger cluster update
         localUserConfigList.put(user, targetConfigEntry);
 
-        logger.info("Password changed for User \"{}\"", user);
+        logger.trace("Password changed for User \"{}\"", user);
 
         return status;
     }
@@ -654,7 +660,7 @@ public class UserManager implements IUserManager, IObjectReader,
         // TODO: if user was authenticated through AAA server, send
         // Acct-Status-Type=stop message to server with logout as reason
         removeUserFromActiveList(userName);
-        logger.info("User \"{}\" logged out", userName);
+        logger.trace("User \"{}\" logged out", userName);
     }
 
     /*
@@ -665,7 +671,7 @@ public class UserManager implements IUserManager, IObjectReader,
         // TODO: if user was authenticated through AAA server, send
         // Acct-Status-Type=stop message to server with timeout as reason
         removeUserFromActiveList(userName);
-        logger.info("User \"{}\" timed out", userName);
+        logger.trace("User \"{}\" timed out", userName);
     }
 
     @Override
@@ -775,6 +781,16 @@ public class UserManager implements IUserManager, IObjectReader,
             logger.debug("Cluster Service Global removed!");
             this.clusterGlobalService = null;
         }
+    }
+
+    public void setConfigurationService(IConfigurationService service) {
+        logger.trace("Got configuration service set request {}", service);
+        this.configurationService = service;
+    }
+
+    public void unsetConfigurationService(IConfigurationService service) {
+        logger.trace("Got configuration service UNset request");
+        this.configurationService = null;
     }
 
     void unsetContainerAuthClient(IContainerAuthorization s) {

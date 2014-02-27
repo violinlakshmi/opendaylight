@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2013 Cisco Systems, Inc. and others.  All rights reserved.
  *
@@ -21,6 +20,7 @@ import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
+import org.opendaylight.controller.configuration.ConfigurationObject;
 import org.opendaylight.controller.sal.core.NodeConnector;
 import org.opendaylight.controller.sal.packet.BitBufferHelper;
 import org.opendaylight.controller.sal.utils.GUIField;
@@ -33,10 +33,10 @@ import org.opendaylight.controller.sal.utils.StatusCode;
  */
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.NONE)
-public class SubnetConfig implements Cloneable, Serializable {
+public class SubnetConfig extends ConfigurationObject implements Cloneable, Serializable {
     private static final long serialVersionUID = 1L;
-    private static final String prettyFields[] = { GUIField.NAME.toString(),
-            GUIField.GATEWAYIP.toString(), GUIField.NODEPORTS.toString() };
+    private static final String prettyFields[] = { GUIField.NAME.toString(), GUIField.GATEWAYIP.toString(),
+            GUIField.NODEPORTS.toString() };
 
     /**
      * Name of the subnet
@@ -44,14 +44,13 @@ public class SubnetConfig implements Cloneable, Serializable {
     @XmlElement
     private String name;
     /**
-     * A.B.C.D/MM  Where A.B.C.D is the Default
-     * Gateway IP (L3) or ARP Querier IP (L2)
+     * A.B.C.D/MM Where A.B.C.D is the Default Gateway IP (L3) or ARP Querier IP
+     * (L2)
      */
     @XmlElement
     private String subnet;
     /**
-     * Set of node connectors in the format:
-     * Port Type|Port Id@Node Type|Node Id
+     * Set of node connectors in the format: Port Type|Port Id@Node Type|Node Id
      */
     @XmlElement
     private List<String> nodeConnectors;
@@ -68,7 +67,8 @@ public class SubnetConfig implements Cloneable, Serializable {
     public SubnetConfig(SubnetConfig subnetConfig) {
         name = subnetConfig.name;
         subnet = subnetConfig.subnet;
-        nodeConnectors = (subnetConfig.nodeConnectors == null) ? null : new ArrayList<String>(subnetConfig.nodeConnectors);
+        nodeConnectors = (subnetConfig.nodeConnectors == null) ? null : new ArrayList<String>(
+                subnetConfig.nodeConnectors);
     }
 
     public String getName() {
@@ -96,19 +96,43 @@ public class SubnetConfig implements Cloneable, Serializable {
     public Short getIPMaskLen() {
         Short maskLen = 0;
         String[] s = subnet.split("/");
-        maskLen = (s.length == 2) ? Short.valueOf(s[1]) : 32;
+
+        try {
+            maskLen = (s.length == 2) ? Short.valueOf(s[1]) : 32;
+        } catch (NumberFormatException e) {
+            maskLen = 32;
+        }
         return maskLen;
     }
 
     private Status validateSubnetAddress() {
         if (!NetUtils.isIPAddressValid(subnet)) {
-            return new Status(StatusCode.BADREQUEST, String.format("Invalid Subnet configuration: Invalid address: %s", subnet));
+            return new Status(StatusCode.BADREQUEST, String.format("Invalid Subnet configuration: Invalid address: %s",
+                    subnet));
         }
+        if ((this.getIPMaskLen() == 0) || (this.getIPMaskLen() == 32)) {
+            return new Status(StatusCode.BADREQUEST, String.format("Invalid Subnet configuration: Invalid mask: /%s",
+                    this.getIPMaskLen()));
+        }
+
+        //checks that address doesn't start with 0 or 255
+        String address = subnet.split("/")[0];
+        if (address.startsWith("0.") || address.startsWith("255.")) {
+            return  new Status(StatusCode.BADREQUEST, String.format("Invalid Subnet configuration: Invalid address: %s", address));
+        }
+
         byte[] bytePrefix = NetUtils.getSubnetPrefix(this.getIPAddress(), this.getIPMaskLen()).getAddress();
         long prefix = BitBufferHelper.getLong(bytePrefix);
         if (prefix == 0) {
             return new Status(StatusCode.BADREQUEST, "Invalid network source address: subnet zero");
         }
+
+        //check that host is not set to all 0's or 1's
+        long hostAddress = BitBufferHelper.getLong(this.getIPAddress().getAddress()) - prefix;
+        if (hostAddress == 0 || hostAddress == Math.pow(2, 32-this.getIPMaskLen()) - 1) {
+            return new Status(StatusCode.BADREQUEST, String.format("Invalid subnet gateway address: /%s", subnet));
+        }
+
         return new Status(StatusCode.SUCCESS);
     }
 
@@ -124,10 +148,20 @@ public class SubnetConfig implements Cloneable, Serializable {
         return new Status(StatusCode.SUCCESS);
     }
 
+    private Status validateName() {
+        if (!isValidResourceName(name)) {
+            return new Status(StatusCode.BADREQUEST, "Invalid name");
+        }
+        return new Status(StatusCode.SUCCESS);
+    }
+
     public Status validate() {
-        Status status = validateSubnetAddress();
+        Status status = validateName();
         if (status.isSuccess()) {
-            status = validatePorts(this.nodeConnectors);
+            status = validateSubnetAddress();
+            if (status.isSuccess()) {
+                status = validatePorts(this.nodeConnectors);
+            }
         }
         return status;
     }
@@ -145,7 +179,8 @@ public class SubnetConfig implements Cloneable, Serializable {
     }
 
     public boolean isGlobal() {
-        // If no ports are specified to be part of the domain, then it's a global domain IP
+        // If no ports are specified to be part of the domain, then it's a
+        // global domain IP
         return (nodeConnectors == null || nodeConnectors.isEmpty());
     }
 
@@ -167,8 +202,7 @@ public class SubnetConfig implements Cloneable, Serializable {
 
     @Override
     public String toString() {
-        return ("SubnetConfig [Name=" + name + ", Subnet=" + subnet
-                + ", NodeConnectors=" + nodeConnectors + "]");
+        return ("SubnetConfig [Name=" + name + ", Subnet=" + subnet + ", NodeConnectors=" + nodeConnectors + "]");
     }
 
     /**

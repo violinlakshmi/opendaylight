@@ -12,6 +12,7 @@ import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -22,11 +23,13 @@ import java.util.concurrent.ConcurrentMap;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-import org.codehaus.jackson.map.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.opendaylight.controller.connectionmanager.IConnectionManager;
 import org.opendaylight.controller.forwarding.staticrouting.IForwardingStaticRouting;
 import org.opendaylight.controller.forwarding.staticrouting.StaticRouteConfig;
 import org.opendaylight.controller.sal.authorization.Privilege;
 import org.opendaylight.controller.sal.authorization.UserLevel;
+import org.opendaylight.controller.sal.connection.ConnectionConstants;
 import org.opendaylight.controller.sal.core.Config;
 import org.opendaylight.controller.sal.core.Description;
 import org.opendaylight.controller.sal.core.ForwardingMode;
@@ -38,8 +41,10 @@ import org.opendaylight.controller.sal.core.State;
 import org.opendaylight.controller.sal.core.Tier;
 import org.opendaylight.controller.sal.utils.GlobalConstants;
 import org.opendaylight.controller.sal.utils.HexEncode;
+import org.opendaylight.controller.sal.utils.NetUtils;
 import org.opendaylight.controller.sal.utils.ServiceHelper;
 import org.opendaylight.controller.sal.utils.Status;
+import org.opendaylight.controller.sal.utils.StatusCode;
 import org.opendaylight.controller.sal.utils.TierHelper;
 import org.opendaylight.controller.switchmanager.ISwitchManager;
 import org.opendaylight.controller.switchmanager.SpanConfig;
@@ -49,6 +54,7 @@ import org.opendaylight.controller.switchmanager.SwitchConfig;
 import org.opendaylight.controller.web.DaylightWebUtil;
 import org.opendaylight.controller.web.IDaylightWeb;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -130,7 +136,7 @@ public class Devices implements IDaylightWeb {
                 nodeDatum.put("mode", modeStr);
 
                 nodeDatum.put("json", gson.toJson(nodeDatum));
-                nodeDatum.put("mac", HexEncode.bytesToHexString(device.getDataLayerAddress()));
+                nodeDatum.put("mac", HexEncode.bytesToHexStringFormat(device.getDataLayerAddress()));
                 StringBuffer sb1 = new StringBuffer();
                 Set<NodeConnector> nodeConnectorSet = device.getNodeConnectors();
                 if (nodeConnectorSet != null && nodeConnectorSet.size() > 0) {
@@ -729,6 +735,100 @@ public class Devices implements IDaylightWeb {
         return resultBean;
     }
 
+    @RequestMapping(value = "/connect/nodes", method = RequestMethod.GET)
+    @ResponseBody
+    public List<NodeJsonBean> getNodes(HttpServletRequest request) {
+        IConnectionManager connectionManager = (IConnectionManager) ServiceHelper.getGlobalInstance(
+                IConnectionManager.class, this);
+        if (connectionManager == null) {
+            return null;
+        }
+        ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class,
+                GlobalConstants.DEFAULT.toString(), this);
+        if (switchManager == null) {
+            return null;
+        }
+
+        Set<Node> nodes = connectionManager.getLocalNodes();
+        List<NodeJsonBean> result = new LinkedList<NodeJsonBean>();
+        if (nodes == null) {
+            return result;
+        }
+        for (Node node : nodes) {
+            Description descriptionProperty = (Description) switchManager.getNodeProp(node, "description");
+            String description = node.toString();
+            if (descriptionProperty != null) {
+                description = descriptionProperty.getValue();
+            }
+            NodeJsonBean nodeBean = new NodeJsonBean();
+            nodeBean.setNodeId(node.getNodeIDString());
+            nodeBean.setNodeType(node.getType());
+            if (description.equals("None")) {
+                nodeBean.setNodeName(node.toString());
+            } else {
+                nodeBean.setNodeName(description);
+            }
+            result.add(nodeBean);
+        }
+
+        return result;
+    }
+
+    @RequestMapping(value = "/connect/{nodeId}", method = RequestMethod.POST)
+    @ResponseBody
+    public Status addNode(HttpServletRequest request, @PathVariable("nodeId") String nodeId,
+            @RequestParam(required = true) String ipAddress, @RequestParam(required = true) String port,
+            @RequestParam(required = false) String nodeType) {
+        IConnectionManager connectionManager = (IConnectionManager) ServiceHelper.getGlobalInstance(
+                IConnectionManager.class, this);
+        if (connectionManager == null) {
+            return new Status(StatusCode.NOTFOUND, "Service not found");
+        }
+
+        if (!NetUtils.isIPv4AddressValid(ipAddress)) {
+            return new Status(StatusCode.NOTACCEPTABLE, "Invalid IP Address: " + ipAddress);
+        }
+
+        try {
+            Integer.parseInt(port);
+        } catch (Exception e) {
+            return new Status(StatusCode.NOTACCEPTABLE, "Invalid Layer 4 Port: " + port);
+        }
+
+        Map<ConnectionConstants, String> params = new HashMap<ConnectionConstants, String>();
+        params.put(ConnectionConstants.ADDRESS, ipAddress);
+        params.put(ConnectionConstants.PORT, port);
+
+        Node node = null;
+        if (nodeType != null) {
+            node = connectionManager.connect(nodeType, nodeId, params);
+        } else {
+            node = connectionManager.connect(nodeId, params);
+        }
+        if (node == null) {
+            return new Status(StatusCode.NOTFOUND, "Failed to connect to Node at " + ipAddress + ":" + port);
+        }
+        return new Status(StatusCode.SUCCESS);
+    }
+
+    @RequestMapping(value = "/disconnect/{nodeId}", method = RequestMethod.POST)
+    @ResponseBody
+    public Status removeNode(HttpServletRequest request, @PathVariable("nodeId") String nodeId,
+            @RequestParam(required = true) String nodeType) {
+        IConnectionManager connectionManager = (IConnectionManager) ServiceHelper.getGlobalInstance(
+                IConnectionManager.class, this);
+        if (connectionManager == null) {
+            return new Status(StatusCode.NOTFOUND, "Service not found");
+        }
+
+        try {
+            Node node = new Node(nodeType, nodeId);
+            return connectionManager.disconnect(node);
+        } catch (Exception e) {
+            return new Status(StatusCode.NOTFOUND, "Resource not found");
+        }
+    }
+
     private String getNodeDesc(String nodeId, String containerName) {
         ISwitchManager switchManager = (ISwitchManager) ServiceHelper.getInstance(ISwitchManager.class, containerName,
                 this);
@@ -752,7 +852,6 @@ public class Devices implements IDaylightWeb {
 
     @RequestMapping(value = "login")
     public String login(final HttpServletRequest request, final HttpServletResponse response) {
-        // response.setHeader("X-Page-Location", "/login");
         /*
          * IUserManager userManager = (IUserManager) ServiceHelper
          * .getGlobalInstance(IUserManager.class, this); if (userManager ==

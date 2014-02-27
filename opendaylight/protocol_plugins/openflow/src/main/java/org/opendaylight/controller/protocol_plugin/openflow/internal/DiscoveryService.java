@@ -125,7 +125,7 @@ public class DiscoveryService implements IInventoryShimExternalListener, IDataPa
     private Boolean throttling = false; // if true, no more batching.
     private volatile Boolean shuttingDown = false;
 
-    private LLDPTLV chassisIdTlv, portIdTlv, ttlTlv, customTlv;
+    private LLDPTLV chassisIdTlv, systemNameTlv, portIdTlv, ttlTlv, customTlv;
     private IPluginOutConnectionService connectionOutService;
 
     class DiscoveryTransmit implements Runnable {
@@ -217,6 +217,11 @@ public class DiscoveryService implements IInventoryShimExternalListener, IDataPa
         chassisIdTlv.setType(LLDPTLV.TLVType.ChassisID.getValue()).setLength((short) cidValue.length)
                 .setValue(cidValue);
 
+        // Create LLDP SystemName TLV
+        byte[] snValue = LLDPTLV.createSystemNameTLVValue(nodeConnector.getNode().toString());
+        systemNameTlv.setType(LLDPTLV.TLVType.SystemName.getValue()).setLength((short) snValue.length)
+                .setValue(snValue);
+
         // Create LLDP PortID TLV
         String portId = nodeConnector.getNodeConnectorIDString();
         byte[] pidValue = LLDPTLV.createPortIDTLVValue(portId);
@@ -233,7 +238,8 @@ public class DiscoveryService implements IInventoryShimExternalListener, IDataPa
 
         // Create discovery pkt
         LLDP discoveryPkt = new LLDP();
-        discoveryPkt.setChassisId(chassisIdTlv).setPortId(portIdTlv).setTtl(ttlTlv).setOptionalTLVList(customList);
+        discoveryPkt.setChassisId(chassisIdTlv).setPortId(portIdTlv).setTtl(ttlTlv).setSystemNameId(systemNameTlv)
+                .setOptionalTLVList(customList);
 
         RawPacket rawPkt = null;
         try {
@@ -385,7 +391,12 @@ public class DiscoveryService implements IInventoryShimExternalListener, IDataPa
 
             updateProdEdge(edge, props);
         } catch (Exception e) {
-            logger.warn("Caught exception ", e);
+            if (logger.isDebugEnabled()) {
+                logger.debug(
+                        "Caught exception while attempting to snoop non controller generated or malformed LLDP frame sent by {} and received on {}: {}",
+                        HexEncode.bytesToHexStringFormat(ethPkt.getSourceMACAddress()), dstNodeConnector,
+                        e.getMessage());
+            }
         }
     }
 
@@ -406,7 +417,7 @@ public class DiscoveryService implements IInventoryShimExternalListener, IDataPa
 
         List<LLDPTLV> optionalTLVList = lldp.getOptionalTLVList();
         if (optionalTLVList == null) {
-            logger.info("The discovery packet with null custom option from {}", dstNodeConnector);
+            logger.warn("The discovery packet with null custom option from {}", dstNodeConnector);
             return false;
         }
 
@@ -1461,6 +1472,10 @@ public class DiscoveryService implements IInventoryShimExternalListener, IDataPa
         // Create LLDP ChassisID TLV
         chassisIdTlv = new LLDPTLV();
         chassisIdTlv.setType(LLDPTLV.TLVType.ChassisID.getValue());
+
+        // Create LLDP SystemName TLV
+        systemNameTlv = new LLDPTLV();
+        systemNameTlv.setType(LLDPTLV.TLVType.SystemName.getValue());
 
         // Create LLDP PortID TLV
         portIdTlv = new LLDPTLV();

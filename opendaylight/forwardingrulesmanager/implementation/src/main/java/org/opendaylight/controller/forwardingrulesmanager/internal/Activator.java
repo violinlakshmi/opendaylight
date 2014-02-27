@@ -8,29 +8,31 @@
 
 package org.opendaylight.controller.forwardingrulesmanager.internal;
 
-import org.opendaylight.controller.clustering.services.ICacheUpdateAware;
 import java.util.Dictionary;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.Set;
 
 import org.apache.felix.dm.Component;
+import org.opendaylight.controller.clustering.services.ICacheUpdateAware;
+import org.opendaylight.controller.clustering.services.IClusterContainerServices;
 import org.opendaylight.controller.configuration.IConfigurationContainerAware;
+import org.opendaylight.controller.configuration.IConfigurationContainerService;
+import org.opendaylight.controller.connectionmanager.IConnectionManager;
+import org.opendaylight.controller.containermanager.IContainerManager;
 import org.opendaylight.controller.forwardingrulesmanager.IForwardingRulesManager;
 import org.opendaylight.controller.forwardingrulesmanager.IForwardingRulesManagerAware;
 import org.opendaylight.controller.sal.core.ComponentActivatorAbstractBase;
 import org.opendaylight.controller.sal.core.IContainer;
-import org.opendaylight.controller.sal.core.IContainerListener;
+import org.opendaylight.controller.sal.core.IContainerLocalListener;
 import org.opendaylight.controller.sal.flowprogrammer.IFlowProgrammerListener;
 import org.opendaylight.controller.sal.flowprogrammer.IFlowProgrammerService;
+import org.opendaylight.controller.sal.utils.GlobalConstants;
 import org.opendaylight.controller.switchmanager.IInventoryListener;
 import org.opendaylight.controller.switchmanager.ISwitchManager;
 import org.opendaylight.controller.switchmanager.ISwitchManagerAware;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import org.opendaylight.controller.clustering.services.IClusterContainerServices;
-import org.opendaylight.controller.connectionmanager.IConnectionManager;
 
 public class Activator extends ComponentActivatorAbstractBase {
     protected static final Logger logger = LoggerFactory.getLogger(Activator.class);
@@ -72,12 +74,13 @@ public class Activator extends ComponentActivatorAbstractBase {
             String interfaces[] = null;
             Dictionary<String, Object> props = new Hashtable<String, Object>();
             Set<String> propSet = new HashSet<String>();
-            propSet.add(ForwardingRulesManager.WORKSTATUSCACHE);
-            propSet.add(ForwardingRulesManager.WORKORDERCACHE);
+            propSet.add(ForwardingRulesManager.WORK_STATUS_CACHE);
+            propSet.add(ForwardingRulesManager.WORK_ORDER_CACHE);
+            propSet.add(ForwardingRulesManager.INSTALLED_SW_VIEW_CACHE);
             props.put("cachenames", propSet);
 
             // export the service
-            interfaces = new String[] { IContainerListener.class.getName(), ISwitchManagerAware.class.getName(),
+            interfaces = new String[] { IContainerLocalListener.class.getName(), ISwitchManagerAware.class.getName(),
                     IForwardingRulesManager.class.getName(), IInventoryListener.class.getName(),
                     IConfigurationContainerAware.class.getName(), ICacheUpdateAware.class.getName(),
                     IFlowProgrammerListener.class.getName() };
@@ -95,8 +98,21 @@ public class Activator extends ComponentActivatorAbstractBase {
             c.add(createContainerServiceDependency(containerName).setService(IContainer.class)
                     .setCallbacks("setIContainer", "unsetIContainer").setRequired(true));
             c.add(createServiceDependency().setService(IConnectionManager.class)
-                    .setCallbacks("setIConnectionManager", "unsetIConnectionManager")
-                    .setRequired(true));
+                    .setCallbacks("setIConnectionManager", "unsetIConnectionManager").setRequired(true));
+            c.add(createContainerServiceDependency(containerName).setService(
+                    IConfigurationContainerService.class).setCallbacks(
+                    "setConfigurationContainerService",
+                    "unsetConfigurationContainerService").setRequired(true));
+            if (GlobalConstants.DEFAULT.toString().equals(containerName)) {
+                c.add(createServiceDependency().setService(IContainerManager.class)
+                        .setCallbacks("setIContainerManager", "unsetIContainerManager").setRequired(true));
+            }
         }
+    }
+
+    @Override
+    protected Object[] getGlobalImplementations() {
+        final Object[] res = { ForwardingRulesManagerCLI.class };
+        return res;
     }
 }

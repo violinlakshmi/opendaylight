@@ -65,6 +65,12 @@ final class FlowEntryDistributionOrderFutureTask implements Future<Status> {
 
     @Override
     public boolean cancel(boolean mayInterruptIfRunning) {
+        if (this.waitingLatch.getCount() != 0L) {
+            this.retStatus = new Status(StatusCode.GONE);
+            this.waitingLatch.countDown();
+            logger.trace("Cancelled the workOrder");
+            return true;
+        }
         return false;
     }
 
@@ -87,7 +93,8 @@ final class FlowEntryDistributionOrderFutureTask implements Future<Status> {
             // Return the known status
             return retStatus;
         } else {
-            logger.error("Timing out, the workStatus for order {} has not come back in time!", this.order);
+            logger.error("Timing out, the workStatus for order {} has not come back in time!, it's hashcode is {}",
+                    this.order, this.order.hashCode());
             return new Status(StatusCode.TIMEOUT);
         }
     }

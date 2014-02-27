@@ -12,11 +12,11 @@ package org.opendaylight.controller.networkconfig.bridgedomain.northbound;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -24,16 +24,13 @@ import javax.ws.rs.core.SecurityContext;
 
 import org.codehaus.enunciate.jaxrs.ResponseCode;
 import org.codehaus.enunciate.jaxrs.StatusCodes;
-import org.codehaus.enunciate.jaxrs.TypeHint;
 import org.opendaylight.controller.connectionmanager.IConnectionManager;
 import org.opendaylight.controller.northbound.commons.exception.NotAcceptableException;
 import org.opendaylight.controller.northbound.commons.exception.ResourceNotFoundException;
 import org.opendaylight.controller.northbound.commons.exception.ServiceUnavailableException;
-import org.opendaylight.controller.sal.connection.ConnectionConstants;
 import org.opendaylight.controller.sal.core.Node;
 import org.opendaylight.controller.sal.networkconfig.bridgedomain.ConfigConstants;
 import org.opendaylight.controller.sal.networkconfig.bridgedomain.IBridgeDomainConfigService;
-import org.opendaylight.controller.sal.utils.NetUtils;
 import org.opendaylight.controller.sal.utils.ServiceHelper;
 import org.opendaylight.controller.sal.utils.Status;
 import org.opendaylight.controller.sal.utils.StatusCode;
@@ -73,152 +70,6 @@ public class BridgeDomainNorthbound {
     }
 
     /**
-     * If a Network Configuration Service needs a special Management Connection and if the
-     * Node Type is unknown, use this REST api to connect to the management session.
-     * <pre>
-     *
-     * Example :
-     *
-     * Request :
-     * http://localhost:8080/controller/nb/v2/networkconfig/bridgedomain/connect/mgmt1/1.1.1.1/6634
-     *
-     * Response :
-     * Node :
-     * xml :
-     * &lt;node&gt;
-     *    &lt;id&gt;mgmt1&lt;/id&gt;
-     *    &lt;type&gt;STUB&lt;/type&gt;
-     * &lt;/node&gt;
-     *
-     * json:
-     * {"id": "mgmt1","type": "STUB"}
-     *
-     *</pre>
-     * @param nodeName User-Defined name of the node to connect with. This can be any alpha numeric value
-     * @param ipAddress IP Address of the Node to connect with.
-     * @param port Layer4 Port of the management session to connect with.
-     * @return Node If the connection is successful, HTTP 404 otherwise.
-     */
-
-    @Path("/connect/{nodeName}/{ipAddress}/{port}/")
-    @PUT
-    @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
-    @TypeHint(Node.class)
-    @StatusCodes( {
-        @ResponseCode(code = 201, condition = "Node connected successfully"),
-        @ResponseCode(code = 404, condition = "Could not connect to the Node with the specified parameters"),
-        @ResponseCode(code = 406, condition = "Invalid IP Address or Port parameter passed."),
-        @ResponseCode(code = 503, condition = "Connection Manager Service not available")} )
-    public Node connect(
-            @PathParam(value = "nodeName") String nodeName,
-            @PathParam(value = "ipAddress") String ipAddress,
-            @PathParam(value = "port") String port) {
-
-        IConnectionManager connectionManager = getConnectionManager();
-        if (connectionManager == null) {
-            throw new ServiceUnavailableException("IConnectionManager not available.");
-        }
-
-        if (!NetUtils.isIPv4AddressValid(ipAddress)) {
-            throw new NotAcceptableException("Invalid ip address "+ipAddress);
-        }
-
-        try {
-            Integer.parseInt(port);
-        } catch (Exception e) {
-            throw new NotAcceptableException("Invalid Layer4 Port "+port);
-        }
-
-        Map<ConnectionConstants, String> params = new HashMap<ConnectionConstants, String>();
-        params.put(ConnectionConstants.ADDRESS, ipAddress);
-        params.put(ConnectionConstants.PORT, port);
-
-        Node node = null;
-        try {
-            node = connectionManager.connect(nodeName, params);
-            if (node == null) {
-                throw new ResourceNotFoundException("Failed to connect to Node at "+ipAddress+":"+port);
-            }
-            return node;
-        } catch (Exception e) {
-            throw new ResourceNotFoundException(e.getMessage());
-        }
-    }
-
-    /**
-     * If a Network Configuration Service needs a special Management Connection, and if the
-     * node Type is known, the user can choose to use this REST api to connect to the management session.
-     * <pre>
-     *
-     * Example :
-     *
-     * Request :
-     * http://localhost:8080/controller/nb/v2/networkconfig/bridgedomain/connect/STUB/mgmt1/1.1.1.1/6634
-     *
-     * Response : Node :
-     * xml :
-     * &lt;node&gt;
-     *    &lt;id&gt;mgmt1&lt;/id&gt;
-     *    &lt;type&gt;STUB&lt;/type&gt;
-     * &lt;/node&gt;
-     *
-     * json:
-     * {"id": "mgmt1","type": "STUB"}
-     *
-     *</pre>
-     * @param nodeName User-Defined name of the node to connect with. This can be any alpha numeric value
-     * @param ipAddress IP Address of the Node to connect with.
-     * @param port Layer4 Port of the management session to connect with.
-     * @return Node If the connection is successful, HTTP 404 otherwise.
-     */
-
-    @Path("/connect/{nodeType}/{nodeId}/{ipAddress}/{port}/")
-    @PUT
-    @Produces({ MediaType.APPLICATION_JSON, MediaType.APPLICATION_XML })
-    @TypeHint(Node.class)
-    @StatusCodes( {
-        @ResponseCode(code = 201, condition = "Node connected successfully"),
-        @ResponseCode(code = 404, condition = "Could not connect to the Node with the specified parameters"),
-        @ResponseCode(code = 406, condition = "Invalid IP Address or Port parameter passed."),
-        @ResponseCode(code = 503, condition = "Connection Manager Service not available")} )
-    public Node connect(
-            @PathParam(value = "nodeType") String nodeType,
-            @PathParam(value = "nodeId") String nodeId,
-            @PathParam(value = "ipAddress") String ipAddress,
-            @PathParam(value = "port") String port) {
-
-        IConnectionManager connectionManager = getConnectionManager();
-        if (connectionManager == null) {
-            throw new ServiceUnavailableException("IConnectionManager not available.");
-        }
-
-        if (!NetUtils.isIPv4AddressValid(ipAddress)) {
-            throw new NotAcceptableException("Invalid ip address "+ipAddress);
-        }
-
-        try {
-            Integer.parseInt(port);
-        } catch (Exception e) {
-            throw new NotAcceptableException("Invalid Layer4 Port "+port);
-        }
-
-        Map<ConnectionConstants, String> params = new HashMap<ConnectionConstants, String>();
-        params.put(ConnectionConstants.ADDRESS, ipAddress);
-        params.put(ConnectionConstants.PORT, port);
-
-        Node node = null;
-        try {
-            node = connectionManager.connect(nodeType, nodeId, params);
-            if (node == null) {
-                throw new ResourceNotFoundException("Failed to connect to Node at "+ipAddress+":"+port);
-            }
-            return node;
-        } catch (Exception e) {
-            throw new ResourceNotFoundException(e.getMessage());
-        }
-    }
-
-    /**
      * Create a Bridge.
      * <pre>
      *
@@ -231,6 +82,10 @@ public class BridgeDomainNorthbound {
      * @param nodeType Node Type of the node with the management session.
      * @param nodeId Node Identifier of the node with the management session.
      * @param bridgeName Name / Identifier for a bridge to be created.
+     * @param bridgeConfigs Additional Bridge Configurations.
+     *        It takes in complex structures under the ConfigConstants.CUSTOM key.
+     *        The use-cases are documented under wiki.opendaylight.org project pages:
+     *        https://wiki.opendaylight.org/view/OVSDB_Integration:Mininet_OVSDB_Tutorial
      */
 
    @Path("/bridge/{nodeType}/{nodeId}/{bridgeName}")
@@ -243,7 +98,8 @@ public class BridgeDomainNorthbound {
    public Response createBridge(
            @PathParam(value = "nodeType") String nodeType,
            @PathParam(value = "nodeId") String nodeId,
-           @PathParam(value = "bridgeName") String name) {
+           @PathParam(value = "bridgeName") String name,
+           Map<String, Object> bridgeConfigs) {
 
        IBridgeDomainConfigService configurationService = getConfigurationService();
        if (configurationService == null) {
@@ -253,7 +109,8 @@ public class BridgeDomainNorthbound {
        Node node = Node.fromString(nodeType, nodeId);
        Status status = null;
        try {
-           status = configurationService.createBridgeDomain(node, name, null);
+           Map<ConfigConstants, Object> configs = this.buildConfig(bridgeConfigs);
+           status = configurationService.createBridgeDomain(node, name, configs);
            if (status.getCode().equals(StatusCode.SUCCESS)) {
                return Response.status(Response.Status.CREATED).build();
            }
@@ -262,6 +119,53 @@ public class BridgeDomainNorthbound {
        }
        throw new ResourceNotFoundException(status.getDescription());
    }
+
+
+   /**
+    * Remove a Bridge.
+    * <pre>
+    *
+    * Example :
+    *
+    * Request :
+    * DELETE
+    * http://localhost:8080/controller/nb/v2/networkconfig/bridgedomain/bridge/STUB/mgmt1/bridge1
+    *
+    *</pre>
+    * @param nodeType Node Type of the node with the management session.
+    * @param nodeId Node Identifier of the node with the management session.
+    * @param bridgeName Name / Identifier for a bridge to be deleted.
+    */
+
+  @Path("/bridge/{nodeType}/{nodeId}/{bridgeName}")
+  @DELETE
+  @StatusCodes( { @ResponseCode(code = 200, condition = "Bridge deleted successfully"),
+      @ResponseCode(code = 404, condition = "Could not delete Bridge"),
+      @ResponseCode(code = 412, condition = "Failed to delete Bridge due to an exception"),
+      @ResponseCode(code = 503, condition = "Bridge Domain Configuration Service not available")} )
+
+  public Response deleteBridge(
+          @PathParam(value = "nodeType") String nodeType,
+          @PathParam(value = "nodeId") String nodeId,
+          @PathParam(value = "bridgeName") String name) {
+
+      IBridgeDomainConfigService configurationService = getConfigurationService();
+      if (configurationService == null) {
+          throw new ServiceUnavailableException("IBridgeDomainConfigService not available.");
+      }
+
+      Node node = Node.fromString(nodeType, nodeId);
+      Status status = null;
+      try {
+          status = configurationService.deleteBridgeDomain(node, name);
+          if (status.getCode().equals(StatusCode.SUCCESS)) {
+              return Response.status(Response.Status.OK).build();
+          }
+      } catch (Throwable t) {
+          return Response.status(Response.Status.PRECONDITION_FAILED).build();
+      }
+      throw new ResourceNotFoundException(status.getDescription());
+  }
 
    /**
     * Add a Port to a Bridge
@@ -277,16 +181,72 @@ public class BridgeDomainNorthbound {
     * @param nodeId Node Identifier of the node with the management session.
     * @param bridgeName Name / Identifier of the bridge to which a Port is being added.
     * @param portName Name / Identifier of a Port that is being added to a bridge.
+    * @param portConfigs Additional Port Configurations.
+    *        It takes in complex structures under the ConfigConstants.CUSTOM key.
+    *        The use-cases are documented under wiki.opendaylight.org project pages :
+    *        https://wiki.opendaylight.org/view/OVSDB_Integration:Mininet_OVSDB_Tutorial
     */
 
    @Path("/port/{nodeType}/{nodeId}/{bridgeName}/{portName}")
    @POST
+   @Consumes({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
    @StatusCodes( { @ResponseCode(code = 201, condition = "Port added successfully"),
        @ResponseCode(code = 404, condition = "Could not add Port to the Bridge"),
        @ResponseCode(code = 412, condition = "Failed to add Port due to an exception"),
        @ResponseCode(code = 503, condition = "Bridge Domain Configuration Service not available")} )
 
    public Response addPort(
+           @PathParam(value = "nodeType") String nodeType,
+           @PathParam(value = "nodeId") String nodeId,
+           @PathParam(value = "bridgeName") String bridge,
+           @PathParam(value = "portName") String port,
+           Map<String, Object> portConfigs) {
+
+       IBridgeDomainConfigService configurationService = getConfigurationService();
+       if (configurationService == null) {
+           throw new ServiceUnavailableException("IBridgeDomainConfigService not available.");
+       }
+
+       Node node = Node.fromString(nodeType, nodeId);
+       Status status = null;
+       try {
+           Map<ConfigConstants, Object> configs = this.buildConfig(portConfigs);
+           status = configurationService.addPort(node, bridge, port, configs);
+           if (status.getCode().equals(StatusCode.SUCCESS)) {
+               return Response.status(Response.Status.CREATED).build();
+           }
+       } catch (Throwable t) {
+           return Response.status(Response.Status.PRECONDITION_FAILED).build();
+       }
+       throw new ResourceNotFoundException(status.getDescription());
+   }
+
+   /**
+    * Remove a Port from a Bridge
+    * <pre>
+    *
+    * Example :
+    *
+    * Request :
+    * DELETE
+    * http://localhost:8080/controller/nb/v2/networkconfig/bridgedomain/port/STUB/mgmt1/bridge1/port1
+    *
+    *</pre>
+    * @param nodeType Node Type of the node with the management session.
+    * @param nodeId Node Identifier of the node with the management session.
+    * @param bridgeName Name / Identifier of the bridge to which a Port is being added.
+    * @param portName Name / Identifier of a Port that is being deleted from a bridge.
+    */
+
+   @Path("/port/{nodeType}/{nodeId}/{bridgeName}/{portName}")
+   @DELETE
+   @Consumes({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+   @StatusCodes( { @ResponseCode(code = 200, condition = "Port deleted successfully"),
+       @ResponseCode(code = 404, condition = "Could not delete Port to the Bridge"),
+       @ResponseCode(code = 412, condition = "Failed to delete Port due to an exception"),
+       @ResponseCode(code = 503, condition = "Bridge Domain Configuration Service not available")} )
+
+   public Response deletePort(
            @PathParam(value = "nodeType") String nodeType,
            @PathParam(value = "nodeId") String nodeId,
            @PathParam(value = "bridgeName") String bridge,
@@ -300,9 +260,9 @@ public class BridgeDomainNorthbound {
        Node node = Node.fromString(nodeType, nodeId);
        Status status = null;
        try {
-           status = configurationService.addPort(node, bridge, port, null);
+           status = configurationService.deletePort(node, bridge, port);
            if (status.getCode().equals(StatusCode.SUCCESS)) {
-               return Response.status(Response.Status.CREATED).build();
+               return Response.status(Response.Status.OK).build();
            }
        } catch (Throwable t) {
            return Response.status(Response.Status.PRECONDITION_FAILED).build();
@@ -310,7 +270,16 @@ public class BridgeDomainNorthbound {
        throw new ResourceNotFoundException(status.getDescription());
    }
 
-   /**
+   private Map<ConfigConstants, Object> buildConfig(Map<String, Object> rawConfigs) {
+       if (rawConfigs == null) return null;
+       Map<ConfigConstants, Object> configs = new HashMap<ConfigConstants, Object>();
+       for (String key : rawConfigs.keySet()) {
+           ConfigConstants cc = ConfigConstants.valueOf(key.toUpperCase());
+           configs.put(cc, rawConfigs.get(key));
+       }
+       return configs;
+   }
+/**
     * Add a Port,Vlan to a Bridge
     * <pre>
     *

@@ -9,14 +9,16 @@
 
 package org.opendaylight.controller.clustering.stub.internal;
 
-import java.util.ArrayList;
-import java.util.concurrent.ConcurrentHashMap;
-import java.net.UnknownHostException;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Dictionary;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 
 import javax.transaction.HeuristicMixedException;
 import javax.transaction.HeuristicRollbackException;
@@ -24,24 +26,12 @@ import javax.transaction.NotSupportedException;
 import javax.transaction.RollbackException;
 import javax.transaction.SystemException;
 import javax.transaction.Transaction;
-import javax.transaction.TransactionManager;
 
+import org.apache.felix.dm.Component;
 import org.opendaylight.controller.clustering.services.CacheConfigException;
 import org.opendaylight.controller.clustering.services.CacheExistException;
-import org.opendaylight.controller.clustering.services.CacheListenerAddException;
-import org.opendaylight.controller.clustering.services.ICacheUpdateAware;
 import org.opendaylight.controller.clustering.services.IClusterServices;
 import org.opendaylight.controller.clustering.services.IClusterServicesCommon;
-import org.opendaylight.controller.clustering.services.ICoordinatorChangeAware;
-import org.opendaylight.controller.clustering.services.IListenRoleChange;
-import org.opendaylight.controller.clustering.services.ListenRoleChangeAddException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.util.Dictionary;
-import java.util.Collections;
-import java.util.HashSet;
-import org.apache.felix.dm.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +43,7 @@ public abstract class ClusterManagerCommon implements IClusterServicesCommon {
     private ConcurrentMap<String, ConcurrentMap<?, ?>> caches = new ConcurrentHashMap<String, ConcurrentMap<?, ?>>();
 
     protected ClusterManagerCommon() throws UnknownHostException {
-        loopbackAddress = InetAddress.getByName("127.0.0.1");
+        loopbackAddress = InetAddress.getLoopbackAddress();
     }
 
     /**
@@ -128,6 +118,11 @@ public abstract class ClusterManagerCommon implements IClusterServicesCommon {
     public void tcommit() throws RollbackException, HeuristicMixedException,
             HeuristicRollbackException, java.lang.SecurityException,
             java.lang.IllegalStateException, SystemException {
+    }
+
+    @Override
+    public void tbegin(long timeout, TimeUnit unit) throws NotSupportedException, SystemException {
+
     }
 
     @Override

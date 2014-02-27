@@ -8,6 +8,7 @@
 
 package org.opendaylight.controller.networkconfig.neutron;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,7 +19,9 @@ import javax.xml.bind.annotation.XmlRootElement;
 
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.NONE)
-public class NeutronSubnet_IPAllocationPool {
+public class NeutronSubnet_IPAllocationPool implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     // See OpenStack Network API v2.0 Reference for description of
     // annotated attributes
 
@@ -28,7 +31,8 @@ public class NeutronSubnet_IPAllocationPool {
     @XmlElement(name="end")
     String poolEnd;
 
-    public NeutronSubnet_IPAllocationPool() { }
+    public NeutronSubnet_IPAllocationPool() {
+    }
 
     public NeutronSubnet_IPAllocationPool(String lowAddress, String highAddress) {
         poolStart = lowAddress;
@@ -73,15 +77,18 @@ public class NeutronSubnet_IPAllocationPool {
      *
      * @param inputString
      *            IPv4 address in dotted decimal format
-     * @returns high-endian representation of the IPv4 address as a long
+     * @returns high-endian representation of the IPv4 address as a long.
+     *          This method will return 0 if the input is null.
      */
 
     static long convert(String inputString) {
         long ans = 0;
-        String[] parts = inputString.split("\\.");
-        for (String part: parts) {
-            ans <<= 8;
-            ans |= Integer.parseInt(part);
+        if (inputString != null) {
+            String[] parts = inputString.split("\\.");
+            for (String part: parts) {
+                ans <<= 8;
+                ans |= Integer.parseInt(part);
+            }
         }
         return ans;
     }
@@ -109,11 +116,14 @@ public class NeutronSubnet_IPAllocationPool {
      */
     public static String join(String r[],String d)
     {
-        if (r.length == 0) return "";
+        if (r.length == 0) {
+            return "";
+        }
         StringBuilder sb = new StringBuilder();
         int i;
-        for(i=0;i<r.length-1;i++)
+        for(i=0;i<r.length-1;i++) {
             sb.append(r[i]+d);
+        }
         return sb.toString()+r[i];
     }
 

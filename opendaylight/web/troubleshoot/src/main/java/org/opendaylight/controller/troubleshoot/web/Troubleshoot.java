@@ -41,6 +41,7 @@ import org.opendaylight.controller.sal.match.Match;
 import org.opendaylight.controller.sal.match.MatchType;
 import org.opendaylight.controller.sal.reader.FlowOnNode;
 import org.opendaylight.controller.sal.reader.NodeConnectorStatistics;
+import org.opendaylight.controller.sal.reader.NodeDescription;
 import org.opendaylight.controller.sal.utils.EtherTypes;
 import org.opendaylight.controller.sal.utils.GlobalConstants;
 import org.opendaylight.controller.sal.utils.HexEncode;
@@ -62,7 +63,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class Troubleshoot implements IDaylightWeb {
     private static final UserLevel AUTH_LEVEL = UserLevel.CONTAINERUSER;
     private static final List<String> flowStatsColumnNames = Arrays.asList("Node", "In Port",
-            "DL Src", "DL Dst", "DL Type", "DL Vlan", "NW Src", "NW Dst",
+            "DL Src", "DL Dst", "DL Type", "DL Vlan","Vlan Priority", "NW Src", "NW Dst","ToS Bits",
             "NW Proto", "TP Src", "TP Dst", "Actions", "Bytes", "Packets",
             "Time (s)", "Timeout (s)",
             "Priority");
@@ -99,6 +100,30 @@ public class Troubleshoot implements IDaylightWeb {
     @Override
     public boolean isAuthorized(UserLevel userLevel) {
         return userLevel.ordinal() <= AUTH_LEVEL.ordinal();
+    }
+
+    @RequestMapping(value = "/nodeInfo", method = RequestMethod.GET)
+    @ResponseBody
+    public NodeDescription getNodeInfo(HttpServletRequest request, @RequestParam(required = false) String container,
+            @RequestParam(required = true) String nodeId) {
+        List<Map<String, String>> lines = new ArrayList<Map<String, String>>();
+        String containerName = (container == null) ? GlobalConstants.DEFAULT.toString() : container;
+
+        // Derive the privilege this user has on the current container
+        String userName = request.getUserPrincipal().getName();
+        Privilege privilege = DaylightWebUtil.getContainerPrivilege(userName, containerName, this);
+
+        if (privilege != Privilege.NONE) {
+            IStatisticsManager statisticsManager = (IStatisticsManager) ServiceHelper
+                    .getInstance(IStatisticsManager.class, containerName, this);
+            if(statisticsManager != null){
+                Node node = Node.fromString(nodeId);
+                NodeDescription nodeDesc = statisticsManager.getNodeDescription(node);
+                return nodeDesc;
+            }
+        }
+
+        return new NodeDescription();
     }
 
     @RequestMapping(value = "/existingNodes", method = RequestMethod.GET)
@@ -229,6 +254,7 @@ public class Troubleshoot implements IDaylightWeb {
 
     private Map<String, String> convertPortsStatistics(
             NodeConnectorStatistics ncStats, String containerName) {
+
         Map<String, String> row = new HashMap<String, String>();
 
         ISwitchManager switchManager = (ISwitchManager) ServiceHelper
@@ -313,6 +339,19 @@ public class Troubleshoot implements IDaylightWeb {
         } else {
             row.put(MatchType.DL_VLAN.id(), "*");
         }
+        //Vlan Priority
+        if (match.isPresent(MatchType.DL_VLAN_PR)) {
+            if (((Byte) flow.getMatch().getField(MatchType.DL_VLAN_PR).getValue())
+                    .shortValue() < 0) {
+                row.put(MatchType.DL_VLAN_PR.id(), "0");
+            } else {
+                row.put(MatchType.DL_VLAN_PR.id(), ((Byte) flow.getMatch()
+                        .getField(MatchType.DL_VLAN_PR).getValue()).toString());
+            }
+        } else {
+            row.put(MatchType.DL_VLAN_PR.id(), "*");
+        }
+
         if (match.isPresent(MatchType.NW_SRC)) {
             row.put(MatchType.NW_SRC.id(), ((InetAddress) flow.getMatch()
                     .getField(MatchType.NW_SRC).getValue()).getHostAddress());
@@ -324,6 +363,12 @@ public class Troubleshoot implements IDaylightWeb {
                     .getField(MatchType.NW_DST).getValue()).getHostAddress());
         } else {
             row.put(MatchType.NW_DST.id(), "*");
+        }
+        if (match.isPresent(MatchType.NW_TOS)) {
+            row.put(MatchType.NW_TOS.id(), ((Byte) flow.getMatch()
+                        .getField(MatchType.NW_TOS).getValue()).toString());
+        } else {
+            row.put(MatchType.NW_TOS.id(), "*");
         }
         if (match.isPresent(MatchType.NW_PROTO)) {
             row.put(MatchType.NW_PROTO.id(),
@@ -361,57 +406,46 @@ public class Troubleshoot implements IDaylightWeb {
                 if (outPorts.length() > 0) {
                     outPorts.append(" ");
                 }
-                actions.append(action.getType().toString() + " = "
-                        + ao.getPort().getNodeConnectorIdAsString() + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(ao.getPort().getNodeConnectorIdAsString()).append("<br>");
             } else if (action instanceof SetVlanId) {
                 SetVlanId av = (SetVlanId) action;
                 String outVlanId = String.valueOf(av.getVlanId());
-                actions.append(action.getType().toString() + " = " + outVlanId
-                        + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(outVlanId).append("<br>");
             } else if (action instanceof SetDlSrc) {
                 SetDlSrc ads = (SetDlSrc) action;
-                actions.append(action.getType().toString() + " = "
-                        + HexEncode.bytesToHexStringFormat(ads.getDlAddress()) + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(HexEncode.bytesToHexStringFormat(ads.getDlAddress())).append("<br>");
             } else if (action instanceof SetDlDst) {
                 SetDlDst add = (SetDlDst) action;
-                actions.append(action.getType().toString() + " = "
-                        + HexEncode.bytesToHexStringFormat(add.getDlAddress())
-                        + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(HexEncode.bytesToHexStringFormat(add.getDlAddress())).append("<br>");
             } else if (action instanceof SetNwSrc) {
                 SetNwSrc ans = (SetNwSrc) action;
-                actions.append(action.getType().toString() + " = "
-                        + ans.getAddressAsString() + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(ans.getAddressAsString()).append("<br>");
             } else if (action instanceof SetNwDst) {
                 SetNwDst and = (SetNwDst) action;
-                actions.append(action.getType().toString() + " = "
-                        + and.getAddressAsString() + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(and.getAddressAsString()).append("<br>");
             } else if (action instanceof SetNwTos) {
                 SetNwTos ant = (SetNwTos) action;
-                actions.append(action.getType().toString() + " = "
-                        + ant.getNwTos() + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(ant.getNwTos()).append("<br>");
             } else if (action instanceof SetTpSrc) {
                 SetTpSrc ads = (SetTpSrc) action;
-                actions.append(action.getType().toString() + " = "
-                        + ads.getPort() + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(ads.getPort()).append("<br>");
             } else if (action instanceof SetTpDst) {
                 SetTpDst atd = (SetTpDst) action;
-                actions.append(action.getType().toString() + " = "
-                        + atd.getPort() + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(atd.getPort()).append("<br>");
             } else if (action instanceof SetVlanPcp) {
                 SetVlanPcp avp = (SetVlanPcp) action;
-                actions.append(action.getType().toString() + " = "
-                        + avp.getPcp() + "<br>");
+                actions.append(action.getType().toString()).append(" = ").append(avp.getPcp()).append("<br>");
                 // } else if (action instanceof SetDlSrc) {
                 // SetDlSrc ads = (SetDlSrc) action;
             } else {
-                actions.append(action.getType().toString() + "<br>");
+                actions.append(action.getType().toString()).append("<br>");
             }
         }
         row.put("actions", actions.toString());
         row.put("durationSeconds",
                 ((Integer) flowOnNode.getDurationSeconds()).toString());
         row.put("idleTimeout", ((Short) flow.getIdleTimeout()).toString());
-        row.put("priority", String.valueOf(flow.getPriority()));
+        row.put("priority", String.valueOf(NetUtils.getUnsignedShort(flow.getPriority())));
         return row;
     }
 

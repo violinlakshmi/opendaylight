@@ -1,11 +1,13 @@
+/*
+ * Copyright (c) 2014 Cisco Systems, Inc. and others.  All rights reserved.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.opendaylight.controller.topology.northbound;
 
-import static org.junit.Assert.*;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 import org.junit.Test;
 import org.opendaylight.controller.sal.core.Bandwidth;
@@ -20,6 +22,14 @@ import org.opendaylight.controller.sal.utils.NodeConnectorCreator;
 import org.opendaylight.controller.sal.utils.NodeCreator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import static junit.framework.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class TopologyTest {
         protected static final Logger logger = LoggerFactory
@@ -47,14 +57,12 @@ public class TopologyTest {
         try {
             e12 = new Edge(nc12, nc21);
         } catch (ConstructionException e) {
-            logger.error("",e);
-            assertTrue(false);
+            fail("Failed to construct edge " + e.getMessage());
         }
         try {
             e23 = new Edge(nc23, nc32);
         } catch (ConstructionException e) {
-            logger.error("",e);
-            assertTrue(false);
+            fail("Failed to construct edge " + e.getMessage());
         }
 
         Set<Property> props = new HashSet<Property>();

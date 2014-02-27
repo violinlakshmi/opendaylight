@@ -45,7 +45,7 @@ one.topology.option = {
     },
     label : function(style, node) {
         var marginTop, minWidth;
-        if (node.data["$type"] == "swtch") {
+        if (node.data["$type"] == "switch") {
             marginTop = "42px";
             minWidth = "65px";
         } else if (node.data["$type"] == "host") {
@@ -98,11 +98,16 @@ one.topology.init = function(json) {
                 Edge : one.topology.option.edge(true, '23A4FF', 1.5),
                 Tips : {
                     enable : true,
-                    type : 'Native',
+                    type : 'auto',
+                    offsetX: 15,
+                    offsetY: 15,
                     onShow : function(tip, node) {
                         if (node.name != undefined)
-                            tip.innerHTML = "";
-                        // tipsOnShow(tip, node);
+                            tip.innerHTML = "Name : " + node.name + "<br>";
+                        if(node.data["$type"]!=undefined)
+                            tip.innerHTML = tip.innerHTML + "Type : " + node.data["$type"] + "<br>";
+                        if(node.data["$desc"]!=undefined)
+                            tip.innerHTML = tip.innerHTML + "Description : " + node.data["$desc"];
                     }
                 },
                 Events : {
@@ -113,8 +118,8 @@ one.topology.init = function(json) {
                         if (node.id != undefined) {
                             one.topology.graph.canvas.getElement().style.cursor = 'move';
                         } else if (eventInfo.edge != undefined
-                                && eventInfo.edge.nodeTo.data["$type"] == "swtch"
-                                && eventInfo.edge.nodeFrom.data["$type"] == "swtch") {
+                                && eventInfo.edge.nodeTo.data["$type"] == "switch"
+                                && eventInfo.edge.nodeFrom.data["$type"] == "switch") {
                             one.topology.graph.canvas.getElement().style.cursor = 'pointer';
                         }
                     },

@@ -9,6 +9,7 @@
 package org.opendaylight.controller.protocol_plugin.openflow.internal;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -26,8 +27,9 @@ import org.opendaylight.controller.protocol_plugin.openflow.core.IController;
 import org.opendaylight.controller.protocol_plugin.openflow.core.IMessageListener;
 import org.opendaylight.controller.protocol_plugin.openflow.core.ISwitch;
 import org.opendaylight.controller.protocol_plugin.openflow.core.ISwitchStateListener;
+import org.opendaylight.controller.sal.action.SupportedFlowActions;
+import org.opendaylight.controller.sal.connection.ConnectionLocality;
 import org.opendaylight.controller.sal.connection.IPluginOutConnectionService;
-import org.opendaylight.controller.sal.core.Actions;
 import org.opendaylight.controller.sal.core.Buffers;
 import org.opendaylight.controller.sal.core.Capabilities;
 import org.opendaylight.controller.sal.core.ContainerFlow;
@@ -237,6 +239,7 @@ public class InventoryServiceShim implements IContainerListener,
     @Override
     public void switchAdded(ISwitch sw) {
         if (sw == null) {
+            logger.debug("Ignore null switch addition");
             return;
         }
         Node node = NodeCreator.createOFNode(sw.getId());
@@ -245,21 +248,32 @@ public class InventoryServiceShim implements IContainerListener,
             return;
         }
 
-        // Add all the nodeConnectors of this switch
-        Map<NodeConnector, Set<Property>> ncProps = InventoryServiceHelper
-                .OFSwitchToProps(sw);
-        for (Map.Entry<NodeConnector, Set<Property>> entry : ncProps.entrySet()) {
-            Set<Property> props = new HashSet<Property>();
-            Set<Property> prop = entry.getValue();
-            if (prop != null) {
-                props.addAll(prop);
+        // Add all the nodeConnectors of this switch if any
+        Map<NodeConnector, Set<Property>> ncProps = InventoryServiceHelper.OFSwitchToProps(sw);
+        if (!ncProps.isEmpty()) {
+            for (Map.Entry<NodeConnector, Set<Property>> entry : ncProps.entrySet()) {
+                Set<Property> props = new HashSet<Property>();
+                Set<Property> prop = entry.getValue();
+                if (prop != null) {
+                    props.addAll(prop);
+                }
+                nodeConnectorProps.put(entry.getKey(), props);
+                notifyInventoryShimListener(entry.getKey(), UpdateType.ADDED, entry.getValue());
             }
-            nodeConnectorProps.put(entry.getKey(), props);
-            notifyInventoryShimListener(entry.getKey(), UpdateType.ADDED, entry.getValue());
+        } else {
+            /*
+             * If no node connector is present, publish the node addition itself
+             * in order to let Connection Manager properly set the node locality
+             */
+            this.notifyInventoryShimListener(node, UpdateType.ADDED, Collections.<Property>emptySet());
         }
 
         // Add this node
-        addNode(sw);
+        if (connectionOutService.getLocalityStatus(node) != ConnectionLocality.NOT_CONNECTED) {
+            addNode(sw);
+        } else {
+            logger.debug("Skipping node addition due to Connectivity Status : {}", connectionOutService.getLocalityStatus(node).name());
+        }
     }
 
     @Override
@@ -498,7 +512,7 @@ public class InventoryServiceShim implements IContainerListener,
             props.add(c);
         }
         int act = sw.getActions();
-        Actions a = new Actions(act);
+        SupportedFlowActions a = new SupportedFlowActions(FlowConverter.getFlowActions(act));
         if (a != null) {
             props.add(a);
         }

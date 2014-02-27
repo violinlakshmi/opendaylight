@@ -7,59 +7,31 @@
  */
 package org.opendaylight.controller.sal.binding.api.data;
 
-import org.opendaylight.controller.sal.common.DataStoreIdentifier;
 
-public interface DataProviderService extends DataBrokerService {
+import org.opendaylight.controller.md.sal.common.api.data.DataProvisionService;
+import org.opendaylight.controller.md.sal.common.api.data.DataReader;
+import org.opendaylight.controller.sal.binding.api.BindingAwareProvider;
+import org.opendaylight.yangtools.concepts.Registration;
+import org.opendaylight.yangtools.yang.binding.DataObject;
+import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 
-    /**
-     * Adds {@link DataValidator} for specified Data Store
-     * 
-     * @param store
-     *            Data Store
-     * @param validator
-     *            Validator
-     */
-    public void addValidator(DataStoreIdentifier store, DataValidator validator);
+/**
+ * DataProviderService is common access point for {@link BindingAwareProvider} providers
+ * to access data trees described by the YANG model.
+ *
+ */
+public interface DataProviderService extends DataBrokerService, DataProvisionService<InstanceIdentifier<? extends DataObject>, DataObject> {
 
-    /**
-     * Removes {@link DataValidator} from specified Data Store
-     * 
-     * @param store
-     * @param validator
-     *            Validator
-     */
-    public void removeValidator(DataStoreIdentifier store, DataValidator validator);
 
     /**
-     * Adds {@link DataCommitHandler} for specified data store
-     * 
-     * @param store
-     * @param provider
+     * Registers a data reader for particular subtree of overal YANG data tree.
+     *
+     * Registered data reader is called if anyone tries to read data from
+     * paths which are nested to provided path.
+     *
+     * @param path Subpath which is handled by registered data reader
+     * @param reader Instance of reader which
+     * @return Registration object for reader. Invoking {@link Registration#close()} will unregister reader.
      */
-    void addCommitHandler(DataStoreIdentifier store, DataCommitHandler provider);
-
-    /**
-     * Removes {@link DataCommitHandler} from specified data store
-     * 
-     * @param store
-     * @param provider
-     */
-    void removeCommitHandler(DataStoreIdentifier store, DataCommitHandler provider);
-
-    /**
-     * Adds {@link DataRefresher} for specified data store
-     * 
-     * @param store
-     * @param refresher
-     */
-    void addRefresher(DataStoreIdentifier store, DataRefresher refresher);
-
-    /**
-     * Removes {@link DataRefresher} from specified data store
-     * 
-     * @param store
-     * @param refresher
-     */
-    void removeRefresher(DataStoreIdentifier store, DataRefresher refresher);
-
+    Registration<DataReader<InstanceIdentifier<? extends DataObject>,DataObject>> registerDataReader(InstanceIdentifier<? extends DataObject> path,DataReader<InstanceIdentifier<? extends DataObject>,DataObject> reader);
 }

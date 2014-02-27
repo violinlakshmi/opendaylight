@@ -19,11 +19,11 @@ package org.opendaylight.controller.sal.packet.address;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opendaylight.controller.sal.core.ConstructionException;
-import org.opendaylight.controller.sal.packet.address.EthernetAddress;
 
 public class EthernetAddressTest {
     @Test
     public void testNonValidConstructor() {
+        @SuppressWarnings("unused")
         EthernetAddress ea1;
         // Null input array
         try {

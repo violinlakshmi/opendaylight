@@ -8,7 +8,6 @@
 
 package org.opendaylight.controller.protocol_plugin.openflow.core.internal;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.ClosedChannelException;
@@ -133,12 +132,17 @@ public class MessageReadWriteService implements IMessageReadWrite {
             throw new AsynchronousCloseException();
         }
 
-        inBuffer.flip();
-        msgs = factory.parseMessages(inBuffer);
-        if (inBuffer.hasRemaining()) {
-            inBuffer.compact();
-        } else {
+        try {
+            inBuffer.flip();
+            msgs = factory.parseMessages(inBuffer);
+            if (inBuffer.hasRemaining()) {
+                inBuffer.compact();
+            } else {
+                inBuffer.clear();
+            }
+        } catch (Exception e) {
             inBuffer.clear();
+            logger.debug("Caught exception: ", e);
         }
         return msgs;
     }

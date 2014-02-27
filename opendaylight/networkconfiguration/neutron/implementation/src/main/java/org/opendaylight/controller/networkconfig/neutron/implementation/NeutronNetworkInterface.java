@@ -8,15 +8,17 @@
 
 package org.opendaylight.controller.networkconfig.neutron.implementation;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Set;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 import org.apache.felix.dm.Component;
@@ -24,17 +26,25 @@ import org.opendaylight.controller.clustering.services.CacheConfigException;
 import org.opendaylight.controller.clustering.services.CacheExistException;
 import org.opendaylight.controller.clustering.services.IClusterContainerServices;
 import org.opendaylight.controller.clustering.services.IClusterServices;
+import org.opendaylight.controller.configuration.ConfigurationObject;
+import org.opendaylight.controller.configuration.IConfigurationContainerAware;
+import org.opendaylight.controller.configuration.IConfigurationContainerService;
 import org.opendaylight.controller.networkconfig.neutron.INeutronNetworkCRUD;
 import org.opendaylight.controller.networkconfig.neutron.NeutronNetwork;
+import org.opendaylight.controller.sal.utils.IObjectReader;
+import org.opendaylight.controller.sal.utils.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class NeutronNetworkInterface implements INeutronNetworkCRUD {
+public class NeutronNetworkInterface implements INeutronNetworkCRUD, IConfigurationContainerAware,
+                                                IObjectReader {
     private static final Logger logger = LoggerFactory.getLogger(NeutronNetworkInterface.class);
+    private static final String FILE_NAME ="neutron.network.conf";
     private String containerName = null;
 
     private ConcurrentMap<String, NeutronNetwork> networkDB;
     private IClusterContainerServices clusterContainerService = null;
+    private IConfigurationContainerService configurationService;
 
     // methods needed for creating caches
 
@@ -50,7 +60,16 @@ public class NeutronNetworkInterface implements INeutronNetworkCRUD {
         }
     }
 
-    @SuppressWarnings("deprecation")
+    public void setConfigurationContainerService(IConfigurationContainerService service) {
+        logger.trace("Configuration service set: {}", service);
+        this.configurationService = service;
+    }
+
+    public void unsetConfigurationContainerService(IConfigurationContainerService service) {
+        logger.trace("Configuration service removed: {}", service);
+        this.configurationService = null;
+    }
+
     private void allocateCache() {
         if (this.clusterContainerService == null) {
             logger.error("un-initialized clusterContainerService, can't create cache");
@@ -69,7 +88,7 @@ public class NeutronNetworkInterface implements INeutronNetworkCRUD {
         logger.debug("Cache successfully created for Neutron Networks");
     }
 
-    @SuppressWarnings({ "unchecked", "deprecation" })
+    @SuppressWarnings({ "unchecked" })
     private void retrieveCache() {
         if (this.clusterContainerService == null) {
             logger.error("un-initialized clusterContainerService, can't retrieve cache");
@@ -86,6 +105,7 @@ public class NeutronNetworkInterface implements INeutronNetworkCRUD {
     private void startUp() {
         allocateCache();
         retrieveCache();
+        loadConfiguration();
     }
 
     /**
@@ -105,7 +125,6 @@ public class NeutronNetworkInterface implements INeutronNetworkCRUD {
         startUp();
     }
 
-    @SuppressWarnings("deprecation")
     private void destroyCache() {
         if (this.clusterContainerService == null) {
             logger.error("un-initialized clusterMger, can't destroy cache");
@@ -171,16 +190,20 @@ public class NeutronNetworkInterface implements INeutronNetworkCRUD {
 
     // IfNBNetworkCRUD methods
 
+    @Override
     public boolean networkExists(String uuid) {
         return networkDB.containsKey(uuid);
     }
 
+    @Override
     public NeutronNetwork getNetwork(String uuid) {
-        if (!networkExists(uuid))
+        if (!networkExists(uuid)) {
             return null;
+        }
         return networkDB.get(uuid);
     }
 
+    @Override
     public List<NeutronNetwork> getAllNetworks() {
         Set<NeutronNetwork> allNetworks = new HashSet<NeutronNetwork>();
         for (Entry<String, NeutronNetwork> entry : networkDB.entrySet()) {
@@ -193,35 +216,63 @@ public class NeutronNetworkInterface implements INeutronNetworkCRUD {
         return ans;
     }
 
+    @Override
     public boolean addNetwork(NeutronNetwork input) {
-        if (networkExists(input.getID()))
+        if (networkExists(input.getID())) {
             return false;
+        }
         networkDB.putIfAbsent(input.getID(), input);
       //TODO: add code to find INeutronNetworkAware services and call newtorkCreated on them
         return true;
     }
 
+    @Override
     public boolean removeNetwork(String uuid) {
-        if (!networkExists(uuid))
+        if (!networkExists(uuid)) {
             return false;
+        }
         networkDB.remove(uuid);
       //TODO: add code to find INeutronNetworkAware services and call newtorkDeleted on them
         return true;
     }
 
+    @Override
     public boolean updateNetwork(String uuid, NeutronNetwork delta) {
-        if (!networkExists(uuid))
+        if (!networkExists(uuid)) {
             return false;
+        }
         NeutronNetwork target = networkDB.get(uuid);
         return overwrite(target, delta);
     }
 
+    @Override
     public boolean networkInUse(String netUUID) {
-        if (!networkExists(netUUID))
+        if (!networkExists(netUUID)) {
             return true;
+        }
         NeutronNetwork target = networkDB.get(netUUID);
-        if (target.getPortsOnNetwork().size() > 0)
+        if (target.getPortsOnNetwork().size() > 0) {
             return true;
+        }
         return false;
     }
+
+    private void loadConfiguration() {
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, FILE_NAME)) {
+            NeutronNetwork nn = (NeutronNetwork) conf;
+            networkDB.put(nn.getID(), nn);
+        }
+    }
+
+    @Override
+    public Status saveConfiguration() {
+        return configurationService.persistConfiguration(new ArrayList<ConfigurationObject>(networkDB.values()),
+                FILE_NAME);
+    }
+
+    @Override
+    public Object readObject(ObjectInputStream ois) throws FileNotFoundException, IOException, ClassNotFoundException {
+        return ois.readObject();
+    }
+
 }

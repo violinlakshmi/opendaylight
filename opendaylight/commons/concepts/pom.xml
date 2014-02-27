@@ -4,17 +4,18 @@
   <parent>
     <groupId>org.opendaylight.controller</groupId>
     <artifactId>commons.opendaylight</artifactId>
-    <version>1.4.0-SNAPSHOT</version>
+    <version>1.4.2-SNAPSHOT</version>
     <relativePath>../../commons/opendaylight</relativePath>
   </parent>
   <scm>
     <connection>scm:git:ssh://git.opendaylight.org:29418/controller.git</connection>
     <developerConnection>scm:git:ssh://git.opendaylight.org:29418/controller.git</developerConnection>
     <url>https://wiki.opendaylight.org/view/OpenDaylight_Controller:Main</url>
+    <tag>HEAD</tag>
   </scm>
 
   <artifactId>concepts</artifactId>
-  <version>0.5.0-SNAPSHOT</version>
+  <version>0.5.2-SNAPSHOT</version>
   <packaging>bundle</packaging>
 
   <build>
@@ -22,7 +23,7 @@
       <plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
-        <version>2.3.6</version>
+        <version>${bundle.plugin.version}</version>
         <extensions>true</extensions>
         <configuration>
           <instructions>
@@ -41,12 +42,12 @@
           <dependency>
             <groupId>org.opendaylight.controller</groupId>
             <artifactId>checkstyle</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>0.0.3-SNAPSHOT</version>
           </dependency>
         </dependencies>
         <configuration>
           <failsOnError>true</failsOnError>
-          <configLocation>controller/space_and_tabs_checks.xml</configLocation>
+          <configLocation>controller/checkstyle.xml</configLocation>
         </configuration>
       </plugin>
     </plugins>
@@ -55,8 +56,6 @@
     <dependency>
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
-      <version>4.8.1</version>
-      <scope>test</scope>
     </dependency>
   </dependencies>
 </project>

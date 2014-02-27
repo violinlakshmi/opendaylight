@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2013 Cisco Systems, Inc. and others.  All rights reserved.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.opendaylight.controller.sal.core.api;
 
 import java.util.Collection;
@@ -6,35 +13,66 @@ import java.util.Collections;
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceReference;
+import org.osgi.util.tracker.ServiceTracker;
+import org.osgi.util.tracker.ServiceTrackerCustomizer;
 
-public abstract class AbstractConsumer implements Consumer, BundleActivator {
+public abstract class AbstractConsumer implements Consumer, BundleActivator,ServiceTrackerCustomizer<Broker, Broker> {
 
-    Broker broker;
-    ServiceReference<Broker> brokerRef;
+    
+    
+    
+    private BundleContext context;
+    private ServiceTracker<Broker, Broker> tracker;
+    private Broker broker;
+
     @Override
     public final void start(BundleContext context) throws Exception {
-        brokerRef = context.getServiceReference(Broker.class);
-        broker = context.getService(brokerRef);
-
+        this.context = context;
         this.startImpl(context);
-
-        broker.registerConsumer(this,context);
+        tracker = new ServiceTracker<>(context, Broker.class, this);
+        tracker.open();
     }
 
-    public abstract void startImpl(BundleContext context);
+
 
     @Override
     public final void stop(BundleContext context) throws Exception {
+        stopImpl(context);
         broker = null;
-        if(brokerRef != null) {
-            context.ungetService(brokerRef);
-        }
+        tracker.close();
     }
 
-    
+    protected void startImpl(BundleContext context) {
+        // NOOP
+    }
+    protected void stopImpl(BundleContext context) {
+        // NOOP
+    }
+
     @Override
     public Collection<ConsumerFunctionality> getConsumerFunctionality() {
         return Collections.emptySet();
     }
 
+    
+    @Override
+    public Broker addingService(ServiceReference<Broker> reference) {
+        if(broker == null) {
+            broker = context.getService(reference);
+            broker.registerConsumer(this, context);
+            return broker;
+        }
+        
+        return null;
+    }
+    
+    @Override
+    public void modifiedService(ServiceReference<Broker> reference, Broker service) {
+        // NOOP
+    }
+    
+    @Override
+    public void removedService(ServiceReference<Broker> reference, Broker service) {
+        stopImpl(context);
+    }
 }

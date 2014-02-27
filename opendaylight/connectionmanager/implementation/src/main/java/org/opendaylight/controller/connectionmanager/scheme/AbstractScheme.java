@@ -1,7 +1,15 @@
+/*
+ * Copyright (c) 2014 Cisco Systems, Inc. and others.  All rights reserved.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.opendaylight.controller.connectionmanager.scheme;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -14,8 +22,8 @@ import org.opendaylight.controller.clustering.services.CacheConfigException;
 import org.opendaylight.controller.clustering.services.CacheExistException;
 import org.opendaylight.controller.clustering.services.IClusterGlobalServices;
 import org.opendaylight.controller.clustering.services.IClusterServices;
-import org.opendaylight.controller.connectionmanager.ConnectionLocality;
 import org.opendaylight.controller.connectionmanager.ConnectionMgmtScheme;
+import org.opendaylight.controller.sal.connection.ConnectionLocality;
 import org.opendaylight.controller.sal.core.Node;
 import org.opendaylight.controller.sal.utils.Status;
 import org.opendaylight.controller.sal.utils.StatusCode;
@@ -134,7 +142,7 @@ public abstract class AbstractScheme {
 
     public Set<InetAddress> getControllers(Node node) {
         if (nodeConnections != null) return nodeConnections.get(node);
-        return null;
+        return Collections.emptySet();
     }
 
     public ConcurrentMap<Node, Set<InetAddress>> getNodeConnections() {
@@ -276,6 +284,11 @@ public abstract class AbstractScheme {
 
     public Status addNode (Node node, InetAddress controller) {
         if (node == null || controller == null) {
+            if (node == null) {
+                log.warn("addNode: node is null");
+            } else if (controller == null) {
+                log.error("Failed to add node {}. The controller address retrieved from clusterServices is null.", node);
+            }
             return new Status(StatusCode.BADREQUEST);
         }
         if (isLocal(node))  {

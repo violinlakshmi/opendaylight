@@ -39,27 +39,43 @@ class RuntimeCodeHelper {
     public static def void setDelegate(RpcService proxy, RpcService delegate) {
         val field = proxy.class.getField(DELEGATE_FIELD)
         if (field == null) throw new UnsupportedOperationException("Unable to set delegate to proxy");
-        if (field.type.isAssignableFrom(delegate.class)) {
+        if (delegate == null || field.type.isAssignableFrom(delegate.class)) {
             field.set(proxy, delegate)
         } else
             throw new IllegalArgumentException("delegate class is not assignable to proxy");
     }
+    
+        /**
+     * Helper method to set delegate to ManagedDirectedProxy with use of reflection.
+     * 
+     * Note: This method uses reflection, but setting delegate field should not occur too much
+     * to introduce any significant performance hits.
+     * 
+     */
+    public static def void setDelegate(Object proxy, Object delegate) {
+        val field = proxy.class.getField(DELEGATE_FIELD)
+        if (field == null) throw new UnsupportedOperationException("Unable to set delegate to proxy");
+        if (delegate == null || field.type.isAssignableFrom(delegate.class)) {
+            field.set(proxy, delegate)
+        } else
+            throw new IllegalArgumentException("delegate class is not assignable to proxy");
+    }
+    
 
-    public static def Map<InstanceIdentifier, ? extends RpcService> getRoutingTable(RpcService target,
+    public static def Map<InstanceIdentifier<?>, ? extends RpcService> getRoutingTable(RpcService target,
         Class<? extends BaseIdentity> tableClass) {
         val field = target.class.getField(tableClass.routingTableField)
         if (field == null) throw new UnsupportedOperationException(
             "Unable to get routing table. Table field does not exists");
-        return field.get(target) as Map<InstanceIdentifier, ? extends RpcService>;
+        return field.get(target) as Map<InstanceIdentifier<? extends Object>, ? extends RpcService>;
     }
 
     public static def void setRoutingTable(RpcService target, Class<? extends BaseIdentity> tableClass,
-        Map<InstanceIdentifier, ? extends RpcService> routingTable) {
+        Map<InstanceIdentifier<?>, ? extends RpcService> routingTable) {
          val field = target.class.getField(tableClass.routingTableField)
         if (field == null) throw new UnsupportedOperationException(
             "Unable to set routing table. Table field does not exists");
         field.set(target,routingTable);
-        
     }
 
 }

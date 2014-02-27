@@ -15,9 +15,6 @@ import java.util.Set;
 import org.opendaylight.controller.sal.authorization.AuthResultEnum;
 import org.opendaylight.controller.sal.authorization.UserLevel;
 import org.opendaylight.controller.sal.utils.Status;
-import org.opendaylight.controller.usermanager.AuthorizationConfig;
-import org.opendaylight.controller.usermanager.ServerConfig;
-import org.opendaylight.controller.usermanager.UserConfig;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.context.SecurityContextRepository;
 
@@ -80,6 +77,17 @@ public interface IUserManager extends UserDetailsService {
      *         status code
      */
     public Status addLocalUser(UserConfig configObject);
+
+    /**
+     * Modify a local user
+     *
+     * @param configObject
+     *            {@link org.opendaylight.controller.usermanager.internal.UserConfig}
+     *            The new User Configuration
+     * @return refer to {@link org.opendaylight.controller.sal.utils.Status}
+     *         status code
+     */
+    public Status modifyLocalUser(UserConfig configObject);
 
     /**
      * Remove a local user

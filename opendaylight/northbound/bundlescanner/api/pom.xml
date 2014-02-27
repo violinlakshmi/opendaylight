@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.opendaylight.controller</groupId>
     <artifactId>commons.opendaylight</artifactId>
-    <version>1.4.0-SNAPSHOT</version>
+    <version>1.4.2-SNAPSHOT</version>
     <relativePath>../../../commons/opendaylight</relativePath>
   </parent>
 
@@ -11,18 +11,19 @@
     <connection>scm:git:ssh://git.opendaylight.org:29418/controller.git</connection>
     <developerConnection>scm:git:ssh://git.opendaylight.org:29418/controller.git</developerConnection>
     <url>https://wiki.opendaylight.org/view/OpenDaylight_Controller:Main</url>
+    <tag>HEAD</tag>
   </scm>
 
   <artifactId>bundlescanner</artifactId>
-  <version>0.4.0-SNAPSHOT</version>
+  <version>0.4.2-SNAPSHOT</version>
   <packaging>bundle</packaging>
 
   <build>
     <plugins>
-       <plugin>
+      <plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
-        <version>2.3.6</version>
+        <version>${bundle.plugin.version}</version>
         <extensions>true</extensions>
         <configuration>
           <instructions>
@@ -35,7 +36,7 @@
               javax.xml.bind,
             </Import-Package>
             <Export-Package>
-                org.opendaylight.controller.northbound.bundlescanner
+              org.opendaylight.controller.northbound.bundlescanner
             </Export-Package>
           </instructions>
         </configuration>
@@ -43,4 +44,10 @@
     </plugins>
   </build>
 
+  <dependencies>
+    <dependency>
+      <groupId>org.osgi</groupId>
+      <artifactId>org.osgi.core</artifactId>
+    </dependency>
+  </dependencies>
 </project>

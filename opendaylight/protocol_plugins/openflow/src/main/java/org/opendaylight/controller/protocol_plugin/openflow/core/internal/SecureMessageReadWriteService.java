@@ -19,13 +19,15 @@ import java.nio.channels.SocketChannel;
 import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.util.List;
+
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
+import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.SSLEngineResult.HandshakeStatus;
+
 import org.opendaylight.controller.protocol_plugin.openflow.core.IMessageReadWrite;
 import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.factory.BasicFactory;
@@ -111,8 +113,8 @@ public class SecureMessageReadWriteService implements IMessageReadWrite {
 
         KeyStore ks = KeyStore.getInstance("JKS");
         KeyStore ts = KeyStore.getInstance("JKS");
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
         kfd = new FileInputStream(keyStoreFile);
         tfd = new FileInputStream(trustStoreFile);
         ks.load(kfd, keyStorePassword.toCharArray());
@@ -280,12 +282,17 @@ public class SecureMessageReadWriteService implements IMessageReadWrite {
                     peerNetData.position(), peerNetData.limit());
         }
 
-        peerAppData.flip();
-        msgs = factory.parseMessages(peerAppData);
-        if (peerAppData.hasRemaining()) {
-            peerAppData.compact();
-        } else {
+        try {
+            peerAppData.flip();
+            msgs = factory.parseMessages(peerAppData);
+            if (peerAppData.hasRemaining()) {
+                peerAppData.compact();
+            } else {
+                peerAppData.clear();
+            }
+        } catch (Exception e) {
             peerAppData.clear();
+            logger.debug("Caught exception: ", e);
         }
 
         this.socket.register(this.selector, SelectionKey.OP_READ, this);
@@ -400,9 +407,9 @@ public class SecureMessageReadWriteService implements IMessageReadWrite {
         this.myAppData = ByteBuffer
                 .allocate(session.getApplicationBufferSize());
         this.peerAppData = ByteBuffer.allocate(session
-                .getApplicationBufferSize());
+                .getApplicationBufferSize() * 20);
         this.myNetData = ByteBuffer.allocate(session.getPacketBufferSize());
-        this.peerNetData = ByteBuffer.allocate(session.getPacketBufferSize());
+        this.peerNetData = ByteBuffer.allocate(session.getPacketBufferSize() * 20);
     }
 
     @Override

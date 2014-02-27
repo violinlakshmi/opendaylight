@@ -11,10 +11,6 @@ import javassist.ClassPool
 import org.opendaylight.yangtools.yang.binding.RpcService
 
 import javassist.CtClass
-import static com.google.common.base.Preconditions.*
-
-import javassist.CtField
-import javassist.Modifier
 import javassist.CtMethod
 import org.opendaylight.yangtools.yang.binding.InstanceIdentifier
 import org.opendaylight.yangtools.yang.binding.annotations.RoutingContext
@@ -22,165 +18,308 @@ import org.opendaylight.yangtools.yang.binding.BaseIdentity
 
 import java.util.Map
 import java.util.HashMap
-import javassist.NotFoundException
-import javassist.LoaderClassPath
-import org.opendaylight.controller.sal.binding.codegen.impl.JavassistUtils.MethodGenerator
-import org.opendaylight.controller.sal.binding.codegen.impl.JavassistUtils.ClassGenerator
+
+
 import org.opendaylight.yangtools.yang.binding.NotificationListener
 import org.opendaylight.yangtools.yang.binding.Notification
-import java.util.Arrays
+
 
 import static extension org.opendaylight.controller.sal.binding.codegen.YangtoolsMappingHelper.*
 import static extension org.opendaylight.controller.sal.binding.codegen.RuntimeCodeSpecification.*
+import java.util.HashSet
+import static org.opendaylight.yangtools.concepts.util.ClassLoaderUtils.*
+import org.opendaylight.controller.sal.binding.spi.NotificationInvokerFactory
+import org.opendaylight.controller.sal.binding.spi.NotificationInvokerFactory.NotificationInvoker
+import java.util.Set
+import org.opendaylight.controller.sal.binding.codegen.RuntimeCodeHelper
+import java.util.WeakHashMap
+import org.opendaylight.yangtools.yang.binding.annotations.QName
+import org.opendaylight.yangtools.yang.binding.DataContainer
+import org.opendaylight.yangtools.yang.binding.RpcImplementation
+import org.opendaylight.yangtools.sal.binding.generator.util.JavassistUtils
+import org.opendaylight.yangtools.sal.binding.generator.util.ClassLoaderUtils
+import javassist.LoaderClassPath
 
-class RuntimeCodeGenerator {
+class RuntimeCodeGenerator implements org.opendaylight.controller.sal.binding.codegen.RuntimeCodeGenerator, NotificationInvokerFactory {
 
+    val CtClass BROKER_NOTIFICATION_LISTENER;
     val ClassPool classPool;
+    val extension JavassistUtils utils;
+    val Map<Class<? extends NotificationListener>, RuntimeGeneratedInvokerPrototype> invokerClasses;
 
-    public new(ClassPool pool) {
+
+    new(ClassPool pool) {
         classPool = pool;
+        utils = new JavassistUtils(pool);
+        invokerClasses = new WeakHashMap();
+        BROKER_NOTIFICATION_LISTENER = org.opendaylight.controller.sal.binding.api.NotificationListener.asCtClass;
+        pool.appendClassPath(new LoaderClassPath(RpcService.classLoader));
     }
 
-    def <T extends RpcService> Class<? extends T> generateDirectProxy(Class<T> iface) {
-        val supertype = iface.asCtClass
-        val targetCls = createClass(iface.directProxyName, supertype) [
-            field(DELEGATE_FIELD, iface);
-            implementMethodsFrom(supertype) [
-                body = '''return ($r) «DELEGATE_FIELD».«it.name»($$);'''
-            ]
-        ]
-        return targetCls.toClass(iface.classLoader)
-    }
-
-    def <T extends RpcService> Class<? extends T> generateRouter(Class<T> iface) {
-        val supertype = iface.asCtClass
-        val targetCls = createClass(iface.routerName, supertype) [
-            //field(ROUTING_TABLE_FIELD,Map)
-            field(DELEGATE_FIELD, iface)
-            val contexts = new HashMap<String, Class<? extends BaseIdentity>>();
-            // We search for routing pairs and add fields
-            supertype.methods.filter[declaringClass == supertype && parameterTypes.size === 1].forEach [ method |
-                val routingPair = method.routingContextInput;
-                if (routingPair !== null)
-                    contexts.put(routingPair.context.routingTableField, routingPair.context);
-            ]
-            for (ctx : contexts.entrySet) {
-                field(ctx.key, Map)
+    override <T extends RpcService> getDirectProxyFor(Class<T> iface) {
+        val T instance =  withClassLoaderAndLock(iface.classLoader,lock) [|
+            val proxyName = iface.directProxyName;
+            val potentialClass = ClassLoaderUtils.tryToLoadClassWithTCCL(proxyName)
+            if(potentialClass != null) {
+                return potentialClass.newInstance as T;
             }
-            implementMethodsFrom(supertype) [
-                if (parameterTypes.size === 1) {
-                    val routingPair = routingContextInput;
-                    val bodyTmp = '''
+            val supertype = iface.asCtClass
+            val createdCls = createClass(iface.directProxyName, supertype) [
+                field(DELEGATE_FIELD, iface);
+                implementsType(RpcImplementation.asCtClass)
+                implementMethodsFrom(supertype) [
+                    body = '''
                     {
-                        final «InstanceIdentifier.name» identifier = $1.«routingPair.getter.name»();
-                        «supertype.name» instance = («supertype.name») «routingPair.context.routingTableField».get(identifier);
-                        if(instance == null) {
-                           instance = «DELEGATE_FIELD»;
+                        if(«DELEGATE_FIELD» == null) {
+                            throw new java.lang.IllegalStateException("No default provider is available");
                         }
-                        return ($r) instance.«it.name»($$);
-                    }'''
-                    body = bodyTmp
-                } else if (parameterTypes.size === 0) {
-                    body = '''return ($r) «DELEGATE_FIELD».«it.name»($$);'''
-                }
-            ]
-        ]
-        return targetCls.toClass(iface.classLoader)
-    }
-
-    def Class<?> generateListenerInvoker(Class<? extends NotificationListener> iface) {
-        val targetCls = createClass(iface.invokerName) [
-            field(DELEGATE_FIELD, iface)
-            it.method(Void, "invoke", Notification) [
-                val callbacks = iface.methods.filter[notificationCallback]
-                body = '''
-                    {
-                        «FOR callback : callbacks SEPARATOR " else "»
-                            if($1 instanceof «val cls = callback.parameterTypes.get(0).name») {
-                                «DELEGATE_FIELD».«callback.name»((«cls») $1);
-                                return;
-                            }
-                        «ENDFOR»
+                        return ($r) «DELEGATE_FIELD».«it.name»($$);
                     }
-                '''
+                    '''
+                ]
+                implementMethodsFrom(RpcImplementation.asCtClass) [
+                    body = '''
+                    {
+                        throw new java.lang.IllegalStateException("No provider is processing supplied message");
+                        return ($r) null;
+                    }
+                    '''
+                ]
             ]
+            return createdCls.toClass(iface.classLoader).newInstance as T
         ]
-        return targetCls.toClass(iface.classLoader);
+        return instance;
     }
 
-    def void method(CtClass it, Class<?> returnType, String name, Class<?> parameter, MethodGenerator function1) {
-        val method = new CtMethod(returnType.asCtClass, name, Arrays.asList(parameter.asCtClass), it);
-        function1.process(method);
-        it.addMethod(method);
+    override <T extends RpcService> getRouterFor(Class<T> iface,String routerInstanceName) {
+        val metadata = withClassLoader(iface.classLoader) [|
+            val supertype = iface.asCtClass
+            return supertype.rpcMetadata;
+        ]
+
+        val instance = <T>withClassLoaderAndLock(iface.classLoader,lock) [ |
+            val supertype = iface.asCtClass
+            val routerName = iface.routerName;
+            val potentialClass = ClassLoaderUtils.tryToLoadClassWithTCCL(routerName)
+            if(potentialClass != null) {
+                return potentialClass.newInstance as T;
+            }
+
+            val targetCls = createClass(iface.routerName, supertype) [
+
+
+                field(DELEGATE_FIELD, iface)
+                //field(REMOTE_INVOKER_FIELD,iface);
+                implementsType(RpcImplementation.asCtClass)
+
+                for (ctx : metadata.contexts) {
+                    field(ctx.routingTableField, Map)
+                }
+                implementMethodsFrom(supertype) [
+                    if (parameterTypes.size === 1) {
+                        val rpcMeta = metadata.rpcMethods.get(name);
+                        val bodyTmp = '''
+                        {
+                            final «InstanceIdentifier.name» identifier = $1.«rpcMeta.inputRouteGetter.name»()«IF rpcMeta.
+                            routeEncapsulated».getValue()«ENDIF»;
+                            «supertype.name» instance = («supertype.name») «rpcMeta.context.routingTableField».get(identifier);
+                            if(instance == null) {
+                               instance = «DELEGATE_FIELD»;
+                            }
+                            if(instance == null) {
+                                throw new java.lang.IllegalStateException("No routable provider is processing routed message for " + String.valueOf(identifier));
+                            }
+                            return ($r) instance.«it.name»($$);
+                        }'''
+                        body = bodyTmp
+                    } else if (parameterTypes.size === 0) {
+                        body = '''return ($r) «DELEGATE_FIELD».«it.name»($$);'''
+                    }
+                ]
+                implementMethodsFrom(RpcImplementation.asCtClass) [
+                    body = '''
+                    {
+                        throw new java.lang.IllegalStateException("No provider is processing supplied message");
+                        return ($r) null;
+                    }
+                    '''
+                ]
+            ]
+            return targetCls.toClass(iface.classLoader,iface.protectionDomain).newInstance as T
+
+        ];
+        return new RpcRouterCodegenInstance(routerInstanceName,iface, instance, metadata.contexts,metadata.supportedInputs);
     }
 
-    private def routingContextInput(CtMethod method) {
+    private def RpcServiceMetadata getRpcMetadata(CtClass iface) {
+        val metadata = new RpcServiceMetadata;
+
+        iface.methods.filter[declaringClass == iface && parameterTypes.size === 1].forEach [ method |
+            val routingPair = method.rpcMetadata;
+            if (routingPair !== null) {
+                metadata.contexts.add(routingPair.context)
+                metadata.rpcMethods.put(method.name,routingPair)
+                val input = routingPair.inputType.javaClass as Class<? extends DataContainer>;
+                metadata.supportedInputs.add(input);
+                metadata.rpcInputs.put(input,routingPair);
+            }
+        ]
+        return metadata;
+    }
+
+    private def getRpcMetadata(CtMethod method) {
         val inputClass = method.parameterTypes.get(0);
-        return inputClass.contextInstance;
+        return inputClass.rpcMethodMetadata(inputClass,method.name);
     }
 
-    private def RoutingPair getContextInstance(CtClass dataClass) {
+    private def RpcMetadata rpcMethodMetadata(CtClass dataClass,CtClass inputClass,String rpcMethod) {
         for (method : dataClass.methods) {
-            if (method.parameterTypes.size === 0 && method.name.startsWith("get")) {
+            if (method.name.startsWith("get") && method.parameterTypes.size === 0) {
                 for (annotation : method.availableAnnotations) {
                     if (annotation instanceof RoutingContext) {
-                        return new RoutingPair((annotation as RoutingContext).value, method)
+                        val encapsulated = !method.returnType.equals(InstanceIdentifier.asCtClass);
+                        return new RpcMetadata(null,rpcMethod,(annotation as RoutingContext).value, method, encapsulated,inputClass);
                     }
                 }
             }
         }
         for (iface : dataClass.interfaces) {
-            val ret = getContextInstance(iface);
-            if (ret != null) return ret;
+            val ret = rpcMethodMetadata(iface,inputClass,rpcMethod);
+            if(ret != null) return ret;
         }
         return null;
     }
 
-    private def void implementMethodsFrom(CtClass target, CtClass source, MethodGenerator function1) {
-        for (method : source.methods) {
-            if (method.declaringClass == source) {
-                val redeclaredMethod = new CtMethod(method, target, null);
-                function1.process(redeclaredMethod);
-                target.addMethod(redeclaredMethod);
+    private def getJavaClass(CtClass cls) {
+        Thread.currentThread.contextClassLoader.loadClass(cls.name)
+    }
+
+    override getInvokerFactory() {
+        return this;
+    }
+
+    override invokerFor(NotificationListener instance) {
+        val cls = instance.class
+        val prototype = resolveInvokerClass(cls);
+
+        return new RuntimeGeneratedInvoker(instance, prototype)
+    }
+
+    protected def generateListenerInvoker(Class<? extends NotificationListener> iface) {
+        val callbacks = iface.methods.filter[notificationCallback]
+
+        val supportedNotification = callbacks.map[parameterTypes.get(0) as Class<? extends Notification>].toSet;
+
+        val targetCls = createClass(iface.invokerName, BROKER_NOTIFICATION_LISTENER) [
+            field(DELEGATE_FIELD, iface)
+            implementMethodsFrom(BROKER_NOTIFICATION_LISTENER) [
+                body = '''
+                    {
+                        «FOR callback : callbacks SEPARATOR " else "»
+                            «val cls = callback.parameterTypes.get(0).name»
+                                if($1 instanceof «cls») {
+                                    «DELEGATE_FIELD».«callback.name»((«cls») $1);
+                                    return null;
+                                }
+                        «ENDFOR»
+                        return null;
+                    }
+                '''
+            ]
+        ]
+        val finalClass = targetCls.toClass(iface.classLoader, iface.protectionDomain)
+        return new RuntimeGeneratedInvokerPrototype(supportedNotification,
+            finalClass as Class<? extends org.opendaylight.controller.sal.binding.api.NotificationListener<?>>);
+    }
+
+
+
+
+
+    protected def resolveInvokerClass(Class<? extends NotificationListener> class1) {
+        return <RuntimeGeneratedInvokerPrototype>withClassLoaderAndLock(class1.classLoader,lock) [|
+            val invoker = invokerClasses.get(class1);
+            if (invoker !== null) {
+                return invoker;
             }
-        }
+            val newInvoker = generateListenerInvoker(class1);
+            invokerClasses.put(class1, newInvoker);
+            return newInvoker
+
+        ]
+    }
+}
+
+@Data
+package class RuntimeGeneratedInvoker implements NotificationInvoker {
+
+    @Property
+    val NotificationListener delegate;
+
+    @Property
+    var org.opendaylight.controller.sal.binding.api.NotificationListener<Notification> invocationProxy;
+
+    @Property
+    var RuntimeGeneratedInvokerPrototype prototype;
+
+    new(NotificationListener delegate, RuntimeGeneratedInvokerPrototype prototype) {
+        _delegate = delegate;
+        _prototype = prototype;
+        _invocationProxy = prototype.protoClass.newInstance as org.opendaylight.controller.sal.binding.api.NotificationListener<Notification>;
+        RuntimeCodeHelper.setDelegate(_invocationProxy, delegate);
     }
 
-    private def CtClass createClass(String fqn, ClassGenerator cls) {
-        val target = classPool.makeClass(fqn);
-        cls.process(target);
-        return target;
+    override getSupportedNotifications() {
+        prototype.supportedNotifications;
     }
 
-    private def CtClass createClass(String fqn, CtClass superInterface, ClassGenerator cls) {
-        val target = classPool.makeClass(fqn);
-        target.implementsType(superInterface);
-        cls.process(target);
-        return target;
+    override close() {
     }
+}
 
-    private def void implementsType(CtClass it, CtClass supertype) {
-        checkArgument(supertype.interface, "Supertype must be interface");
-        addInterface(supertype);
-    }
+@Data
+package class RuntimeGeneratedInvokerPrototype {
 
-    private def asCtClass(Class<?> class1) {
-        classPool.get(class1);
-    }
+    @Property
+    val Set<Class<? extends Notification>> supportedNotifications;
 
-    private def CtField field(CtClass it, String name, Class<?> returnValue) {
-        val field = new CtField(returnValue.asCtClass, name, it);
-        field.modifiers = Modifier.PUBLIC
-        addField(field);
-        return field;
-    }
+    @Property
+    val Class<? extends org.opendaylight.controller.sal.binding.api.NotificationListener<?>> protoClass;
+}
 
-    def get(ClassPool pool, Class<?> cls) {
-        try {
-            return pool.get(cls.name)
-        } catch (NotFoundException e) {
-            pool.appendClassPath(new LoaderClassPath(cls.classLoader));
-            return pool.get(cls.name)
-        }
-    }
+package class RpcServiceMetadata {
+
+    @Property
+    val contexts = new HashSet<Class<? extends BaseIdentity>>();
+
+    @Property
+    val rpcMethods = new HashMap<String, RpcMetadata>();
+
+    @Property
+    val rpcInputs = new HashMap<Class<? extends DataContainer>, RpcMetadata>();
+
+
+    @Property
+    val supportedInputs = new HashSet<Class<? extends DataContainer>>();
+}
+
+@Data
+package class RpcMetadata {
+
+    @Property
+    val QName qname;
+
+    @Property
+    val String methodName;
+
+    @Property
+    val Class<? extends BaseIdentity> context;
+    @Property
+    val CtMethod inputRouteGetter;
+
+    @Property
+    val boolean routeEncapsulated;
+
+    @Property
+    val CtClass inputType;
 }

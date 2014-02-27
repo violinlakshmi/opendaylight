@@ -12,6 +12,7 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.opendaylight.controller.configuration.ConfigurationObject;
 import org.opendaylight.controller.sal.core.Description;
 import org.opendaylight.controller.sal.core.ForwardingMode;
 import org.opendaylight.controller.sal.core.Property;
@@ -20,9 +21,9 @@ import org.opendaylight.controller.sal.utils.Status;
 import org.opendaylight.controller.sal.utils.StatusCode;
 
 /**
- * The class describes a switch configuration
+ * The class describes a switch configuration as a collection of properties
  */
-public class SwitchConfig implements Cloneable, Serializable {
+public class SwitchConfig extends ConfigurationObject implements Cloneable, Serializable {
     private static final long serialVersionUID = 1L;
     private final String nodeId;
     private final Map<String, Property> nodeProperties;
@@ -122,15 +123,20 @@ public class SwitchConfig implements Cloneable, Serializable {
     }
 
     private Status validateNodeId() {
-        if (nodeId == null || nodeId.isEmpty()) {
-            return new Status(StatusCode.BADREQUEST, "NodeId cannot be empty");
+        if (nodeId == null || nodeId.trim().isEmpty()) {
+            return new Status(StatusCode.BADREQUEST, "Invalid node id");
         }
         return new Status(StatusCode.SUCCESS);
     }
 
     private Status validateNodeProperties() {
         if (nodeProperties == null) {
-            return new Status(StatusCode.BADREQUEST, "nodeProperties cannot be null");
+            return new Status(StatusCode.BADREQUEST, "Node properties must be specified");
+        }
+        if (nodeProperties.containsKey(Description.propertyName)) {
+            if (!isValidResourceName(((Description)nodeProperties.get(Description.propertyName)).getValue())) {
+                return new Status(StatusCode.BADREQUEST, "Invalid node description");
+            }
         }
         return new Status(StatusCode.SUCCESS);
     }

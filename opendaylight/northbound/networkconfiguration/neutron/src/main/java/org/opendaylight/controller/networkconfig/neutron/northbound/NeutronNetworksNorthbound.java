@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -29,14 +30,18 @@ import org.codehaus.enunciate.jaxrs.StatusCodes;
 import org.codehaus.enunciate.jaxrs.TypeHint;
 import org.opendaylight.controller.networkconfig.neutron.INeutronNetworkAware;
 import org.opendaylight.controller.networkconfig.neutron.INeutronNetworkCRUD;
+import org.opendaylight.controller.networkconfig.neutron.NeutronCRUDInterfaces;
 import org.opendaylight.controller.networkconfig.neutron.NeutronNetwork;
 import org.opendaylight.controller.northbound.commons.RestMessages;
+import org.opendaylight.controller.northbound.commons.exception.BadRequestException;
+import org.opendaylight.controller.northbound.commons.exception.ResourceConflictException;
+import org.opendaylight.controller.northbound.commons.exception.ResourceNotFoundException;
 import org.opendaylight.controller.northbound.commons.exception.ServiceUnavailableException;
 import org.opendaylight.controller.sal.utils.ServiceHelper;
 
 /**
- * Open DOVE Northbound REST APIs for Network.<br>
- * This class provides REST APIs for managing open DOVE internals related to Networks
+ * Neutron Northbound REST APIs for Network.<br>
+ * This class provides REST APIs for managing neutron Networks
  *
  * <br>
  * <br>
@@ -66,8 +71,8 @@ public class NeutronNetworksNorthbound {
     @Produces({ MediaType.APPLICATION_JSON })
     //@TypeHint(OpenStackNetworks.class)
     @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 401, condition = "Unauthorized") })
+        @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 401, condition = "Unauthorized") })
     public Response listNetworks(
             // return fields
             @QueryParam("fields") List<String> fields,
@@ -87,8 +92,8 @@ public class NeutronNetworksNorthbound {
             @QueryParam("marker") String marker,
             @QueryParam("page_reverse") String pageReverse
             // sorting not supported
-        ) {
-        INeutronNetworkCRUD networkInterface = NeutronNBInterfaces.getIfNBNetworkCRUD("default", this);
+            ) {
+        INeutronNetworkCRUD networkInterface = NeutronCRUDInterfaces.getINeutronNetworkCRUD( this);
         if (networkInterface == null) {
             throw new ServiceUnavailableException("Network CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
@@ -102,12 +107,15 @@ public class NeutronNetworksNorthbound {
             Boolean bAdminStateUp = null;
             Boolean bShared = null;
             Boolean bRouterExternal = null;
-            if (queryAdminStateUp != null)
-                bAdminStateUp = new Boolean(queryAdminStateUp);
-            if (queryShared != null)
-                bShared = new Boolean(queryShared);
-            if (queryRouterExternal != null)
-                bRouterExternal = new Boolean(queryRouterExternal);
+            if (queryAdminStateUp != null) {
+                bAdminStateUp = Boolean.valueOf(queryAdminStateUp);
+            }
+            if (queryShared != null) {
+                bShared = Boolean.valueOf(queryShared);
+            }
+            if (queryRouterExternal != null) {
+                bRouterExternal = Boolean.valueOf(queryRouterExternal);
+            }
             if ((queryID == null || queryID.equals(oSN.getID())) &&
                     (queryName == null || queryName.equals(oSN.getNetworkName())) &&
                     (bAdminStateUp == null || bAdminStateUp.booleanValue() == oSN.isAdminStateUp()) &&
@@ -115,10 +123,11 @@ public class NeutronNetworksNorthbound {
                     (bShared == null || bShared.booleanValue() == oSN.isShared()) &&
                     (bRouterExternal == null || bRouterExternal.booleanValue() == oSN.isRouterExternal()) &&
                     (queryTenantID == null || queryTenantID.equals(oSN.getTenantID()))) {
-                if (fields.size() > 0)
+                if (fields.size() > 0) {
                     ans.add(extractFields(oSN,fields));
-                else
+                } else {
                     ans.add(oSN);
+                }
             }
         }
         //TODO: apply pagination to results
@@ -134,28 +143,30 @@ public class NeutronNetworksNorthbound {
     @Produces({ MediaType.APPLICATION_JSON })
     //@TypeHint(OpenStackNetworks.class)
     @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 401, condition = "Unauthorized"),
-            @ResponseCode(code = 404, condition = "Not Found") })
+        @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 401, condition = "Unauthorized"),
+        @ResponseCode(code = 404, condition = "Not Found") })
     public Response showNetwork(
             @PathParam("netUUID") String netUUID,
             // return fields
             @QueryParam("fields") List<String> fields
             ) {
-        INeutronNetworkCRUD networkInterface = NeutronNBInterfaces.getIfNBNetworkCRUD("default", this);
+        INeutronNetworkCRUD networkInterface = NeutronCRUDInterfaces.getINeutronNetworkCRUD( this);
         if (networkInterface == null) {
             throw new ServiceUnavailableException("Network CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
         }
-        if (!networkInterface.networkExists(netUUID))
-            return Response.status(404).build();
+        if (!networkInterface.networkExists(netUUID)) {
+            throw new ResourceNotFoundException("network UUID does not exist.");
+        }
         if (fields.size() > 0) {
             NeutronNetwork ans = networkInterface.getNetwork(netUUID);
             return Response.status(200).entity(
                     new NeutronNetworkRequest(extractFields(ans, fields))).build();
-        } else
+        } else {
             return Response.status(200).entity(
                     new NeutronNetworkRequest(networkInterface.getNetwork(netUUID))).build();
+        }
     }
 
     /**
@@ -165,11 +176,11 @@ public class NeutronNetworksNorthbound {
     @Consumes({ MediaType.APPLICATION_JSON })
     @TypeHint(NeutronNetwork.class)
     @StatusCodes({
-            @ResponseCode(code = 201, condition = "Created"),
-            @ResponseCode(code = 400, condition = "Bad Request"),
-            @ResponseCode(code = 401, condition = "Unauthorized") })
+        @ResponseCode(code = 201, condition = "Created"),
+        @ResponseCode(code = 400, condition = "Bad Request"),
+        @ResponseCode(code = 401, condition = "Unauthorized") })
     public Response createNetworks(final NeutronNetworkRequest input) {
-        INeutronNetworkCRUD networkInterface = NeutronNBInterfaces.getIfNBNetworkCRUD("default", this);
+        INeutronNetworkCRUD networkInterface = NeutronCRUDInterfaces.getINeutronNetworkCRUD( this);
         if (networkInterface == null) {
             throw new ServiceUnavailableException("Network CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
@@ -180,20 +191,23 @@ public class NeutronNetworksNorthbound {
             /*
              * network ID can't already exist
              */
-            if (networkInterface.networkExists(singleton.getID()))
-                return Response.status(400).build();
+            if (networkInterface.networkExists(singleton.getID())) {
+                throw new BadRequestException("network UUID already exists");
+            }
 
             Object[] instances = ServiceHelper.getGlobalInstances(INeutronNetworkAware.class, this, null);
             if (instances != null) {
                 for (Object instance : instances) {
                     INeutronNetworkAware service = (INeutronNetworkAware) instance;
                     int status = service.canCreateNetwork(singleton);
-                    if (status < 200 || status > 299)
+                    if (status < 200 || status > 299) {
                         return Response.status(status).build();
+                    }
                 }
             }
 
             // add network to cache
+            singleton.initDefaults();
             networkInterface.addNetwork(singleton);
             if (instances != null) {
                 for (Object instance : instances) {
@@ -214,16 +228,19 @@ public class NeutronNetworksNorthbound {
                  * network ID can't already exist, nor can there be an entry for this UUID
                  * already in this bulk request
                  */
-                if (networkInterface.networkExists(test.getID()))
-                    return Response.status(400).build();
-                if (testMap.containsKey(test.getID()))
-                    return Response.status(400).build();
+                if (networkInterface.networkExists(test.getID())) {
+                    throw new BadRequestException("network UUID already exists");
+                }
+                if (testMap.containsKey(test.getID())) {
+                    throw new BadRequestException("network UUID already exists");
+                }
                 if (instances != null) {
                     for (Object instance: instances) {
                         INeutronNetworkAware service = (INeutronNetworkAware) instance;
                         int status = service.canCreateNetwork(test);
-                        if (status < 200 || status > 299)
+                        if (status < 200 || status > 299) {
                             return Response.status(status).build();
+                        }
                     }
                 }
                 testMap.put(test.getID(),test);
@@ -254,14 +271,14 @@ public class NeutronNetworksNorthbound {
     @Consumes({ MediaType.APPLICATION_JSON })
     //@TypeHint(OpenStackNetworks.class)
     @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 400, condition = "Bad Request"),
-            @ResponseCode(code = 403, condition = "Forbidden"),
-            @ResponseCode(code = 404, condition = "Not Found"), })
+        @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 400, condition = "Bad Request"),
+        @ResponseCode(code = 403, condition = "Forbidden"),
+        @ResponseCode(code = 404, condition = "Not Found"), })
     public Response updateNetwork(
             @PathParam("netUUID") String netUUID, final NeutronNetworkRequest input
             ) {
-        INeutronNetworkCRUD networkInterface = NeutronNBInterfaces.getIfNBNetworkCRUD("default", this);
+        INeutronNetworkCRUD networkInterface = NeutronCRUDInterfaces.getINeutronNetworkCRUD( this);
         if (networkInterface == null) {
             throw new ServiceUnavailableException("Network CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
@@ -270,18 +287,21 @@ public class NeutronNetworksNorthbound {
         /*
          * network has to exist and only a single delta is supported
          */
-        if (!networkInterface.networkExists(netUUID))
-            return Response.status(404).build();
-        if (!input.isSingleton())
-            return Response.status(400).build();
+        if (!networkInterface.networkExists(netUUID)) {
+            throw new ResourceNotFoundException("network UUID does not exist.");
+        }
+        if (!input.isSingleton()) {
+            throw new BadRequestException("only singleton edits supported");
+        }
         NeutronNetwork delta = input.getSingleton();
 
         /*
          * transitions forbidden by Neutron
          */
         if (delta.getID() != null || delta.getTenantID() != null ||
-                delta.getStatus() != null)
-            return Response.status(400).build();
+                delta.getStatus() != null) {
+            throw new BadRequestException("attribute edit blocked by Neutron");
+        }
 
         Object[] instances = ServiceHelper.getGlobalInstances(INeutronNetworkAware.class, this, null);
         if (instances != null) {
@@ -289,22 +309,23 @@ public class NeutronNetworksNorthbound {
                 INeutronNetworkAware service = (INeutronNetworkAware) instance;
                 NeutronNetwork original = networkInterface.getNetwork(netUUID);
                 int status = service.canUpdateNetwork(delta, original);
-                if (status < 200 || status > 299)
+                if (status < 200 || status > 299) {
                     return Response.status(status).build();
+                }
             }
         }
 
         // update network object and return the modified object
-        networkInterface.updateNetwork(netUUID, delta);
-        NeutronNetwork updatedSingleton = networkInterface.getNetwork(netUUID);
-        if (instances != null) {
-            for (Object instance : instances) {
-                INeutronNetworkAware service = (INeutronNetworkAware) instance;
-                service.neutronNetworkUpdated(updatedSingleton);
-            }
-        }
-        return Response.status(200).entity(
-                new NeutronNetworkRequest(networkInterface.getNetwork(netUUID))).build();
+                networkInterface.updateNetwork(netUUID, delta);
+                NeutronNetwork updatedSingleton = networkInterface.getNetwork(netUUID);
+                if (instances != null) {
+                    for (Object instance : instances) {
+                        INeutronNetworkAware service = (INeutronNetworkAware) instance;
+                        service.neutronNetworkUpdated(updatedSingleton);
+                    }
+                }
+                return Response.status(200).entity(
+                        new NeutronNetworkRequest(networkInterface.getNetwork(netUUID))).build();
     }
 
     /**
@@ -313,13 +334,13 @@ public class NeutronNetworksNorthbound {
     @Path("{netUUID}")
     @DELETE
     @StatusCodes({
-            @ResponseCode(code = 204, condition = "No Content"),
-            @ResponseCode(code = 401, condition = "Unauthorized"),
-            @ResponseCode(code = 404, condition = "Not Found"),
-            @ResponseCode(code = 409, condition = "Network In Use") })
+        @ResponseCode(code = 204, condition = "No Content"),
+        @ResponseCode(code = 401, condition = "Unauthorized"),
+        @ResponseCode(code = 404, condition = "Not Found"),
+        @ResponseCode(code = 409, condition = "Network In Use") })
     public Response deleteNetwork(
             @PathParam("netUUID") String netUUID) {
-        INeutronNetworkCRUD networkInterface = NeutronNBInterfaces.getIfNBNetworkCRUD("default", this);
+        INeutronNetworkCRUD networkInterface = NeutronCRUDInterfaces.getINeutronNetworkCRUD( this);
         if (networkInterface == null) {
             throw new ServiceUnavailableException("Network CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
@@ -328,10 +349,12 @@ public class NeutronNetworksNorthbound {
         /*
          * network has to exist and not be in use before it can be removed
          */
-        if (!networkInterface.networkExists(netUUID))
-            return Response.status(404).build();
-        if (networkInterface.networkInUse(netUUID))
-            return Response.status(409).build();
+        if (!networkInterface.networkExists(netUUID)) {
+            throw new ResourceNotFoundException("network UUID does not exist.");
+        }
+        if (networkInterface.networkInUse(netUUID)) {
+            throw new ResourceConflictException("Network ID in use");
+        }
 
         NeutronNetwork singleton = networkInterface.getNetwork(netUUID);
         Object[] instances = ServiceHelper.getGlobalInstances(INeutronNetworkAware.class, this, null);
@@ -339,8 +362,9 @@ public class NeutronNetworksNorthbound {
             for (Object instance : instances) {
                 INeutronNetworkAware service = (INeutronNetworkAware) instance;
                 int status = service.canDeleteNetwork(singleton);
-                if (status < 200 || status > 299)
+                if (status < 200 || status > 299) {
                     return Response.status(status).build();
+                }
             }
         }
         networkInterface.removeNetwork(netUUID);

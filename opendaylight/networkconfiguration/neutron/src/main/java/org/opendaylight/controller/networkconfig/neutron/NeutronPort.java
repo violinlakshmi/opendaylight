@@ -8,6 +8,7 @@
 
 package org.opendaylight.controller.networkconfig.neutron;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -18,11 +19,15 @@ import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
+import org.opendaylight.controller.configuration.ConfigurationObject;
+
 
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.NONE)
 
-public class NeutronPort {
+public class NeutronPort extends ConfigurationObject implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     // See OpenStack Network API v2.0 Reference for description of
     // annotated attributes
 
@@ -97,15 +102,16 @@ public class NeutronPort {
     }
 
     public boolean isAdminStateUp() {
-        if (adminStateUp == null)
+        if (adminStateUp == null) {
             return true;
+        }
         return adminStateUp;
     }
 
     public Boolean getAdminStateUp() { return adminStateUp; }
 
     public void setAdminStateUp(Boolean newValue) {
-            this.adminStateUp = newValue;
+            adminStateUp = newValue;
     }
 
     public String getStatus() {
@@ -157,8 +163,9 @@ public class NeutronPort {
     }
 
     public NeutronFloatingIP getFloatingIP(String key) {
-        if (!floatingIPMap.containsKey(key))
+        if (!floatingIPMap.containsKey(key)) {
             return null;
+        }
         return floatingIPMap.get(key);
     }
 
@@ -167,8 +174,9 @@ public class NeutronPort {
     }
 
     public void addFloatingIP(String key, NeutronFloatingIP floatingIP) {
-        if (!floatingIPMap.containsKey(key))
+        if (!floatingIPMap.containsKey(key)) {
             floatingIPMap.put(key, floatingIP);
+        }
     }
 
     /**
@@ -186,18 +194,24 @@ public class NeutronPort {
         Iterator<String> i = fields.iterator();
         while (i.hasNext()) {
             String s = i.next();
-            if (s.equals("id"))
+            if (s.equals("id")) {
                 ans.setPortUUID(this.getPortUUID());
-            if (s.equals("network_id"))
+            }
+            if (s.equals("network_id")) {
                 ans.setNetworkUUID(this.getNetworkUUID());
-            if (s.equals("name"))
+            }
+            if (s.equals("name")) {
                 ans.setName(this.getName());
-            if (s.equals("admin_state_up"))
+            }
+            if (s.equals("admin_state_up")) {
                 ans.setAdminStateUp(this.getAdminStateUp());
-            if (s.equals("status"))
+            }
+            if (s.equals("status")) {
                 ans.setStatus(this.getStatus());
-            if (s.equals("mac_address"))
+            }
+            if (s.equals("mac_address")) {
                 ans.setMacAddress(this.getMacAddress());
+            }
             if (s.equals("fixed_ips")) {
                 List<Neutron_IPs> fixedIPs = new ArrayList<Neutron_IPs>();
                 fixedIPs.addAll(this.getFixedIPs());
@@ -209,18 +223,21 @@ public class NeutronPort {
             if (s.equals("device_owner")) {
                 ans.setDeviceOwner(this.getDeviceOwner());
             }
-            if (s.equals("tenant_id"))
+            if (s.equals("tenant_id")) {
                 ans.setTenantID(this.getTenantID());
+            }
         }
         return ans;
     }
 
     public void initDefaults() {
         adminStateUp = true;
-        if (status == null)
+        if (status == null) {
             status = "ACTIVE";
-        if (fixedIPs == null)
+        }
+        if (fixedIPs == null) {
             fixedIPs = new ArrayList<Neutron_IPs>();
+        }
     }
 
     /**
@@ -235,5 +252,13 @@ public class NeutronPort {
 
     public boolean isBoundToFloatingIP(String fixedIP) {
         return floatingIPMap.containsKey(fixedIP);
+    }
+
+    @Override
+    public String toString() {
+        return "NeutronPort [portUUID=" + portUUID + ", networkUUID=" + networkUUID + ", name=" + name
+                + ", adminStateUp=" + adminStateUp + ", status=" + status + ", macAddress=" + macAddress
+                + ", fixedIPs=" + fixedIPs + ", deviceID=" + deviceID + ", deviceOwner=" + deviceOwner + ", tenantID="
+                + tenantID + ", floatingIPMap=" + floatingIPMap + "]";
     }
 }

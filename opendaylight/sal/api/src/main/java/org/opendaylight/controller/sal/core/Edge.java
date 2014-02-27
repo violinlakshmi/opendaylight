@@ -44,6 +44,7 @@ public class Edge implements Serializable {
     /**
      * Private constructor used for JAXB mapping
      */
+    @SuppressWarnings("unused")
     private Edge() {
         this.tailNodeConnector = null;
         this.headNodeConnector = null;
@@ -84,6 +85,19 @@ public class Edge implements Serializable {
         }
     }
 
+    /**
+     * Create the reversed edge
+     * @return The reversed edge.
+     */
+    public Edge reverse() {
+        Edge re;
+        try {
+            re = new Edge(this.headNodeConnector, this.tailNodeConnector);
+        } catch (ConstructionException e) {
+            re = null;
+        }
+        return re;
+    }
     /**
      * getter of edge
      *

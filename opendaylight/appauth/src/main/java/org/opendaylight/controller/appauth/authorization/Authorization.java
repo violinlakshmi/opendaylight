@@ -16,6 +16,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
+import org.opendaylight.controller.configuration.ConfigurationObject;
+import org.opendaylight.controller.containermanager.IContainerAuthorization;
 import org.opendaylight.controller.sal.authorization.AppRoleLevel;
 import org.opendaylight.controller.sal.authorization.IResourceAuthorization;
 import org.opendaylight.controller.sal.authorization.Privilege;
@@ -26,7 +28,6 @@ import org.opendaylight.controller.sal.utils.ServiceHelper;
 import org.opendaylight.controller.sal.utils.Status;
 import org.opendaylight.controller.sal.utils.StatusCode;
 import org.opendaylight.controller.usermanager.IUserManager;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,7 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class Authorization<T> implements IResourceAuthorization {
 private static final Logger logger = LoggerFactory.getLogger(Authorization.class);
-    private static final String namesRegex = "^[a-zA-Z0-9]+[{\\.|\\_|\\-}[a-zA-Z0-9]]*$";
+    private static final String namesRegex = ConfigurationObject.getRegularExpression();
     /*
      * The configured resource groups
      */
@@ -67,6 +68,11 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
                     "Controller roles cannot be explicitely "
                             + "created in App context");
         }
+        if (isContainerRole(role)) {
+            return new Status(StatusCode.NOTALLOWED,
+                    "Container roles cannot be explicitely "
+                            + "created in App context");
+        }
         if (isRoleInUse(role)) {
             return new Status(StatusCode.CONFLICT, "Role already in use");
         }
@@ -85,7 +91,7 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
     protected Status createRoleInternal(String role, AppRoleLevel level) {
         roles.put(role, level);
         groupsAuthorizations.put(role, new HashSet<ResourceGroup>());
-        return new Status(StatusCode.SUCCESS, null);
+        return new Status(StatusCode.SUCCESS);
     }
 
     @Override
@@ -97,14 +103,17 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
             return new Status(StatusCode.NOTALLOWED,
                     "Controller roles cannot be removed");
         }
-
+        if (isContainerRole(role)) {
+            return new Status(StatusCode.NOTALLOWED,
+                    "Container roles cannot be removed");
+        }
         return removeRoleInternal(role);
     }
 
     protected Status removeRoleInternal(String role) {
         groupsAuthorizations.remove(role);
         roles.remove(role);
-        return new Status(StatusCode.SUCCESS, null);
+        return new Status(StatusCode.SUCCESS);
     }
 
     @Override
@@ -126,7 +135,7 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
         }
         //verify group name is unique
         if (resourceGroups.containsKey(groupName)) {
-        return new Status(StatusCode.CONFLICT, "Group name already exists");
+            return new Status(StatusCode.CONFLICT, "Group name already exists");
         }
 
         //try adding resources, discard if not of type T
@@ -136,58 +145,82 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
             try {
                 toBeAdded.add((T) obj);
             } catch (ClassCastException e) {
+                logger.debug("Attempt to add a resource with invalid type");
                 allAdded = false;
             }
         }
-        /*if (toBeAdded.size() == 0){ // TODO andrekim - we should have the ability to create a group with no resources (so we can add and delete entries)
-           return new Status(StatusCode.NOTACCEPTABLE, "Group not created. No valid resources specified");
-        }*/
         resourceGroups.put(groupName, toBeAdded);
         return (allAdded ? new Status(StatusCode.SUCCESS, "All resources added succesfully") :
             new Status(StatusCode.SUCCESS, "One or more resources couldn't be added"));
     }
 
-    public Status addResourceToGroup(String groupName, T resource) {
+    @SuppressWarnings("unchecked")
+    @Override
+    public Status addResourceToGroup(String groupName, Object resource) {
         if (groupName == null || groupName.trim().isEmpty()) {
             return new Status(StatusCode.BADREQUEST, "Invalid group name");
         }
 
-        Set<T> group = resourceGroups.get(groupName);
-        if (group != null && resource != null) {
-            group.add(resource);
-            return new Status(StatusCode.SUCCESS, "Resource added successfully");
+        if (resource == null) {
+            return new Status(StatusCode.BADREQUEST, "Null resource");
         }
 
-        return new Status(StatusCode.NOTFOUND, "Group not found or incompatible resource");
+        T castedResource = null;
+        try {
+            castedResource = (T) resource;
+        } catch (ClassCastException e) {
+            logger.debug("Attempt to add a resource with invalid type");
+            return new Status(StatusCode.BADREQUEST, "Incompatible resource");
+        }
+
+        Set<T> group = resourceGroups.get(groupName);
+        if (group == null) {
+            return new Status(StatusCode.NOTFOUND, "Group not found");
+        }
+
+        return addResourceToGroupInternal(groupName, castedResource);
     }
 
-    public Status removeRoleResourceGroupMapping(String groupName) {
+    /*
+     * Method child classes can overload if they need application specific
+     * checks on the resource
+     */
+    protected Status addResourceToGroupInternal(String groupName, T resource) {
+        Set<T> group = resourceGroups.get(groupName);
+        // Update group and cluster
+        group.add(resource);
+        resourceGroups.put(groupName, group);
+
+        return new Status(StatusCode.SUCCESS, "Resource added successfully");
+
+    }
+
+    private Status removeRoleResourceGroupMapping(String groupName) {
         List<String> affectedRoles = new ArrayList<String>();
         Status result;
-        for (Entry<String, Set<ResourceGroup>> pairs : groupsAuthorizations
-                .entrySet()) {
+        for (Entry<String, Set<ResourceGroup>> pairs : groupsAuthorizations.entrySet()) {
             String role = pairs.getKey();
             Set<ResourceGroup> groups = pairs.getValue();
             for (ResourceGroup group : groups) {
-            if (group.getGroupName().equals(groupName)) {
-            affectedRoles.add(role);
-            break;
-            }
+                if (group.getGroupName().equals(groupName)) {
+                    affectedRoles.add(role);
+                    break;
+                }
             }
         }
         StringBuffer msg = new StringBuffer();
         for (String role : affectedRoles) {
-             result = unassignResourceGroupFromRole(groupName, role);
-             if (!result.isSuccess()) {
+            result = unassignResourceGroupFromRole(groupName, role);
+            if (!result.isSuccess()) {
                 msg.append(result.getDescription());
                 msg.append(' ');
-             }
-         }
+            }
+        }
 
         if (msg.length() != 0) {
-                return new Status(StatusCode.BADREQUEST, msg.toString());
+            return new Status(StatusCode.BADREQUEST, msg.toString());
         } else {
-                return new Status(StatusCode.SUCCESS);
+            return new Status(StatusCode.SUCCESS);
         }
     }
 
@@ -201,26 +234,24 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
             return new Status(StatusCode.NOTALLOWED,
                     "All resource group cannot be removed");
         }
-
+        resourceGroups.remove(groupName);
         Status result = removeRoleResourceGroupMapping(groupName);
 
-        resourceGroups.remove(groupName);
-
-        if (!result.isSuccess()) {
-            return result;
-        }
-
-        return new Status(StatusCode.SUCCESS, null);
+        return result.isSuccess() ? result :
+            new Status(StatusCode.SUCCESS, "Failed removing group from: " + result.getDescription());
     }
 
 
-    public Status removeResourceFromGroup(String groupName, T resource) {
+    @Override
+    public Status removeResourceFromGroup(String groupName, Object resource) {
         if (groupName == null || groupName.trim().isEmpty()) {
             return new Status(StatusCode.BADREQUEST, "Invalid group name");
         }
 
         Set<T> group = resourceGroups.get(groupName);
         if (group != null && group.remove(resource)) {
+            // Update cluster
+            resourceGroups.put(groupName, group);
             return new Status(StatusCode.SUCCESS, "Resource removed successfully");
         }
 
@@ -440,10 +471,12 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
         return assignResourceGroupToRoleInternal(group, privilege, role);
     }
 
-    protected Status assignResourceGroupToRoleInternal(String group,
-            Privilege privilege, String role) {
-        groupsAuthorizations.get(role).add(new ResourceGroup(group, privilege));
-        return new Status(StatusCode.SUCCESS, null);
+    protected Status assignResourceGroupToRoleInternal(String group, Privilege privilege, String role) {
+        Set<ResourceGroup> roleGroups = groupsAuthorizations.get(role);
+        roleGroups.add(new ResourceGroup(group, privilege));
+        // Update cluster
+        groupsAuthorizations.put(role, roleGroups);
+        return new Status(StatusCode.SUCCESS);
     }
 
     @Override
@@ -489,8 +522,7 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
         return unassignResourceGroupFromRoleInternal(group, role);
     }
 
-    protected Status unassignResourceGroupFromRoleInternal(String group,
-            String role) {
+    protected Status unassignResourceGroupFromRoleInternal(String group, String role) {
         ResourceGroup target = null;
         for (ResourceGroup rGroup : groupsAuthorizations.get(role)) {
             if (rGroup.getGroupName().equals(group)) {
@@ -499,11 +531,13 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
             }
         }
         if (target == null) {
-            return new Status(StatusCode.SUCCESS, "Group " + group
-                    + " was not assigned to " + role);
+            return new Status(StatusCode.SUCCESS, "Group " + group + " was not assigned to " + role);
         } else {
-        groupsAuthorizations.get(role).remove(target);
-        return new Status(StatusCode.SUCCESS);
+            Set<ResourceGroup> groups = groupsAuthorizations.get(role);
+            groups.remove(target);
+            // Update cluster
+            groupsAuthorizations.put(role, groups);
+            return new Status(StatusCode.SUCCESS);
 
         }
     }
@@ -518,7 +552,7 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
     @Override
     public List<Object> getResources(String groupName) {
         return (resourceGroups.containsKey(groupName)) ? new ArrayList<Object>(
-                resourceGroups.get(groupName)) : new ArrayList<Object>();
+                resourceGroups.get(groupName)) : new ArrayList<Object>(0);
     }
 
     @Override
@@ -527,6 +561,24 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
             return false;
         }
         return roles.containsKey(roleName);
+    }
+
+    @Override
+    public boolean isApplicationUser(String userName) {
+        IUserManager userManager = (IUserManager) ServiceHelper
+                .getGlobalInstance(IUserManager.class, this);
+        if (userManager == null) {
+            return false;
+        }
+        List<String> roles = userManager.getUserRoles(userName);
+        if (roles != null && !roles.isEmpty()) {
+            for (String role : roles) {
+                if (isApplicationRole(role)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Override
@@ -600,6 +652,15 @@ private static final Logger logger = LoggerFactory.getLogger(Authorization.class
         return (role.equals(UserLevel.NETWORKADMIN.toString())
                 || role.equals(UserLevel.SYSTEMADMIN.toString()) || role
                     .equals(UserLevel.NETWORKOPERATOR.toString()));
+    }
+
+    private boolean isContainerRole(String role) {
+        IContainerAuthorization containerAuth = (IContainerAuthorization) ServiceHelper.getGlobalInstance(
+                IContainerAuthorization.class, this);
+        if (containerAuth == null) {
+            return false;
+        }
+        return containerAuth.isApplicationRole(role);
     }
 
     private boolean isRoleInUse(String role) {

@@ -17,19 +17,16 @@ import org.opendaylight.controller.samples.loadbalancer.entities.PoolMember;
 import org.opendaylight.controller.samples.loadbalancer.entities.VIP;
 import org.opendaylight.controller.samples.loadbalancer.policies.RoundRobinLBPolicy;
 
-import junit.framework.TestCase;
-
 /**
  *
  * Class to unit test the load balancing policies.
  *
  */
-public class LoadBalancerTest extends TestCase {
+public class LoadBalancerTest {
     @Test
     public void testRoundRobinPolicy() {
         ConfigManager cm = null;
         cm = new ConfigManager();
-        Assert.assertFalse(cm== null);
 
         Pool pool = cm.createPool("TestPool","roundrobin");
         VIP vip = cm.createVIP("TestVIP","10.0.0.9","TCP",(short)5550,"TestPool");

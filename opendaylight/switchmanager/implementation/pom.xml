@@ -1,30 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.opendaylight.controller</groupId>
     <artifactId>commons.opendaylight</artifactId>
-    <version>1.4.0-SNAPSHOT</version>
+    <version>1.4.2-SNAPSHOT</version>
     <relativePath>../../commons/opendaylight</relativePath>
   </parent>
   <scm>
     <connection>scm:git:ssh://git.opendaylight.org:29418/controller.git</connection>
     <developerConnection>scm:git:ssh://git.opendaylight.org:29418/controller.git</developerConnection>
     <url>https://wiki.opendaylight.org/view/OpenDaylight_Controller:Main</url>
+    <tag>HEAD</tag>
   </scm>
 
   <artifactId>switchmanager.implementation</artifactId>
-  <version>0.4.0-SNAPSHOT</version>
+  <version>0.4.2-SNAPSHOT</version>
   <packaging>bundle</packaging>
 
   <properties>
     <!-- Sonar properties using jacoco to retrieve integration test results -->
-    <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
     <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
     <sonar.jacoco.Reportpath>target/jacoco.exec</sonar.jacoco.Reportpath>
     <sonar.jacoco.itReportPath>target/jacoco-it.exec</sonar.jacoco.itReportPath>
-    <sonar.language>java</sonar.language>
   </properties>
   <build>
     <pluginManagement>
@@ -40,16 +38,16 @@
       <plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
-        <version>2.3.6</version>
+        <version>${bundle.plugin.version}</version>
         <extensions>true</extensions>
         <configuration>
           <instructions>
             <Export-Package>
             </Export-Package>
             <Import-Package>
+              org.opendaylight.controller.configuration,
               org.opendaylight.controller.switchmanager,
               org.opendaylight.controller.clustering.services,
-              org.opendaylight.controller.configuration,
               org.opendaylight.controller.sal.core,
               org.opendaylight.controller.sal.utils,
               org.opendaylight.controller.sal.packet,
@@ -98,28 +96,35 @@
   <dependencies>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
-      <artifactId>clustering.services</artifactId>
-      <version>0.4.0-SNAPSHOT</version>
+      <artifactId>configuration</artifactId>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
-      <artifactId>configuration</artifactId>
-      <version>0.4.0-SNAPSHOT</version>
+      <artifactId>clustering.services</artifactId>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>sal</artifactId>
-      <version>0.5.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>switchmanager</artifactId>
-      <version>0.5.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>statisticsmanager</artifactId>
-      <version>0.4.0-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>equinoxSDK381</groupId>
+      <artifactId>org.eclipse.osgi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>equinoxSDK381</groupId>
+      <artifactId>org.apache.felix.gogo.runtime</artifactId>
     </dependency>
   </dependencies>
 </project>

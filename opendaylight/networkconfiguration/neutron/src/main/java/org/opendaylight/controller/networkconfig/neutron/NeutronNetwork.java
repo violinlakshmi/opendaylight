@@ -8,6 +8,7 @@
 
 package org.opendaylight.controller.networkconfig.neutron;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -17,12 +18,16 @@ import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
+import org.opendaylight.controller.configuration.ConfigurationObject;
+
 @XmlRootElement(name = "network")
 @XmlAccessorType(XmlAccessType.NONE)
 
-public class NeutronNetwork {
+public class NeutronNetwork extends ConfigurationObject implements Serializable {
     // See OpenStack Network API v2.0 Reference for description of
     // annotated attributes
+
+    private static final long serialVersionUID = 1L;
 
     @XmlElement (name="id")
     String networkUUID;              // network UUID
@@ -69,16 +74,21 @@ public class NeutronNetwork {
 
     public void initDefaults() {
         subnets = new ArrayList<String>();
-        if (this.status == null)
-            this.status = "ACTIVE";
-        if (this.adminStateUp == null)
-            this.adminStateUp = true;
-        if (this.shared == null)
-            this.shared = false;
-        if (this.routerExternal == null)
-            this.routerExternal = false;
-        if (this.providerNetworkType == null)
-            this.providerNetworkType = "flat";
+        if (status == null) {
+            status = "ACTIVE";
+        }
+        if (adminStateUp == null) {
+            adminStateUp = true;
+        }
+        if (shared == null) {
+            shared = false;
+        }
+        if (routerExternal == null) {
+            routerExternal = false;
+        }
+        if (providerNetworkType == null) {
+            providerNetworkType = "flat";
+        }
     }
 
     public String getID() { return networkUUID; }
@@ -106,7 +116,7 @@ public class NeutronNetwork {
     public Boolean getAdminStateUp() { return adminStateUp; }
 
     public void setAdminStateUp(boolean newValue) {
-        this.adminStateUp = newValue;
+        adminStateUp = newValue;
     }
 
     public boolean isShared() { return shared; }
@@ -114,7 +124,7 @@ public class NeutronNetwork {
     public Boolean getShared() { return shared; }
 
     public void setShared(boolean newValue) {
-        this.shared = newValue;
+        shared = newValue;
     }
 
     public String getTenantID() {
@@ -130,7 +140,7 @@ public class NeutronNetwork {
     public Boolean getRouterExternal() { return routerExternal; }
 
     public void setRouterExternal(boolean newValue) {
-        this.routerExternal = newValue;
+        routerExternal = newValue;
     }
 
     public String getProviderNetworkType() {
@@ -174,11 +184,11 @@ public class NeutronNetwork {
     }
 
     public void addSubnet(String uuid) {
-        this.subnets.add(uuid);
+        subnets.add(uuid);
     }
 
     public void removeSubnet(String uuid) {
-        this.subnets.remove(uuid);
+        subnets.remove(uuid);
     }
 
     public List<NeutronPort> getPortsOnNetwork() {
@@ -208,26 +218,40 @@ public class NeutronNetwork {
         Iterator<String> i = fields.iterator();
         while (i.hasNext()) {
             String s = i.next();
-            if (s.equals("id"))
+            if (s.equals("id")) {
                 ans.setNetworkUUID(this.getNetworkUUID());
-            if (s.equals("name"))
+            }
+            if (s.equals("name")) {
                 ans.setNetworkName(this.getNetworkName());
-            if (s.equals("admin_state_up"))
-                ans.setAdminStateUp(this.adminStateUp);
-            if (s.equals("status"))
+            }
+            if (s.equals("admin_state_up")) {
+                ans.setAdminStateUp(adminStateUp);
+            }
+            if (s.equals("status")) {
                 ans.setStatus(this.getStatus());
+            }
             if (s.equals("subnets")) {
                 List<String> subnetList = new ArrayList<String>();
                 subnetList.addAll(this.getSubnets());
                 ans.setSubnets(subnetList);
             }
-            if (s.equals("shared"))
-                ans.setShared(this.shared);
-            if (s.equals("tenant_id"))
+            if (s.equals("shared")) {
+                ans.setShared(shared);
+            }
+            if (s.equals("tenant_id")) {
                 ans.setTenantID(this.getTenantID());
+            }
         }
         return ans;
     }
 
+    @Override
+    public String toString() {
+        return "NeutronNetwork [networkUUID=" + networkUUID + ", networkName=" + networkName + ", adminStateUp="
+                + adminStateUp + ", shared=" + shared + ", tenantID=" + tenantID + ", routerExternal=" + routerExternal
+                + ", providerNetworkType=" + providerNetworkType + ", providerPhysicalNetwork="
+                + providerPhysicalNetwork + ", providerSegmentationID=" + providerSegmentationID + ", status=" + status
+                + ", subnets=" + subnets + ", myPorts=" + myPorts + "]";
+    }
 }
 

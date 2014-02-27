@@ -20,6 +20,7 @@ import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
+import org.opendaylight.controller.configuration.ConfigurationObject;
 import org.opendaylight.controller.sal.core.ContainerFlow;
 import org.opendaylight.controller.sal.core.NodeConnector;
 import org.opendaylight.controller.sal.match.Match;
@@ -35,11 +36,15 @@ import org.opendaylight.controller.sal.utils.StatusCode;
  * files through java serialization API when saving to/reading from Container
  * Manager startup configuration file.
  */
-@XmlRootElement(name = "container-config")
+@XmlRootElement(name = "containerConfig")
 @XmlAccessorType(XmlAccessType.NONE)
-public class ContainerConfig implements Serializable {
+public class ContainerConfig extends ConfigurationObject implements Serializable {
     private static final long serialVersionUID = 2L;
     private static final String regexName = "^\\w+$";
+    private static final String containerProfile = System.getProperty("container.profile") == null ? "Container"
+            : System.getProperty("container.profile");
+    private static final String ADMIN_SUFFIX = "Admin";
+    private static final String OPERATOR_SUFFIX = "Operator";
 
     @XmlElement
     private String container;
@@ -223,7 +228,7 @@ public class ContainerConfig implements Serializable {
      */
     private Status validateName() {
         // No Container configuration allowed to container default
-        return ((container != null) && container.matches(regexName) && !container.equalsIgnoreCase(GlobalConstants.DEFAULT.toString())) ?
+        return (isValidResourceName(container) && !container.equalsIgnoreCase(GlobalConstants.DEFAULT.toString())) ?
                 new Status(StatusCode.SUCCESS) : new Status(StatusCode.BADREQUEST, "Invalid container name");
     }
 
@@ -310,17 +315,6 @@ public class ContainerConfig implements Serializable {
         if (!status.isSuccess()) {
             return status;
         }
-
-        /* Allow adding ports which are already present
-        if (!ports.isEmpty()) {
-            List<String> intersection = new ArrayList<String>(ports);
-            intersection.retainAll(ncList);
-            if (!intersection.isEmpty()) {
-                return new Status(StatusCode.CONFLICT, "The following node connectors are already part of this container: "
-                        + intersection);
-            }
-        }
-        */
 
         // Add ports
         ports.addAll(ncList);
@@ -415,36 +409,6 @@ public class ContainerConfig implements Serializable {
             }
         }
 
-        /*
-         * Revisit the following flow-spec confict validation later based on more testing.
-         * (*)
-        if (!delete) {
-            // Check for overlapping container flows in the request
-            int size = cFlowConfigs.size();
-            for (int i = 0; i < size; i++) {
-                ContainerFlowConfig first = cFlowConfigs.get(i);
-                for (int j = i + 1; j < size; j++) {
-                    ContainerFlowConfig second = cFlowConfigs.get(j);
-                    if (first.overlap(second)) {
-                        return new Status(StatusCode.BADREQUEST, String.format(
-                                "Invalid Request: the proposed flow specs overlap: %s <-> %s", first.getName(),
-                                second.getName()));
-                    }
-                }
-            }
-            // Check if any of the proposed container flows overlap with the
-            // existing ones
-            for (ContainerFlowConfig current : cFlowConfigs) {
-                for (ContainerFlowConfig existing : this.containerFlows) {
-                    if (current.overlap(existing)) {
-                        return new Status(StatusCode.BADREQUEST, String.format(
-                                "Invalid Request: the proposed flow specs overlap: %s <-> %s", current.getName(),
-                                existing.getName()));
-                    }
-                }
-            }
-        }
-        */
 
         return new Status(StatusCode.SUCCESS);
     }
@@ -651,5 +615,31 @@ public class ContainerConfig implements Serializable {
             }
         }
         return list;
+    }
+
+    private String getContainerRole(boolean admin) {
+        return String.format("%s-%s-%s", containerProfile, container, (admin ? ADMIN_SUFFIX : OPERATOR_SUFFIX));
+    }
+
+    /**
+     * Return the well known administrator role for this container
+     *
+     * @return The administrator role for this container
+     */
+    public String getContainerAdminRole() {
+        return getContainerRole(true);
+    }
+
+    /**
+     * Return the well known operator role for this container
+     *
+     * @return The operator role for this container
+     */
+    public String getContainerOperatorRole() {
+        return getContainerRole(false);
+    }
+
+    public String getContainerGroupName() {
+        return String.format("%s-%s", containerProfile, container);
     }
 }

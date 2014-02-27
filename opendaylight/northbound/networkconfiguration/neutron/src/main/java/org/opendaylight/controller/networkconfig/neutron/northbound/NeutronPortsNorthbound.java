@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -29,18 +30,21 @@ import org.codehaus.enunciate.jaxrs.StatusCodes;
 import org.opendaylight.controller.networkconfig.neutron.INeutronNetworkCRUD;
 import org.opendaylight.controller.networkconfig.neutron.INeutronPortAware;
 import org.opendaylight.controller.networkconfig.neutron.INeutronPortCRUD;
-import org.opendaylight.controller.networkconfig.neutron.INeutronSubnetAware;
 import org.opendaylight.controller.networkconfig.neutron.INeutronSubnetCRUD;
+import org.opendaylight.controller.networkconfig.neutron.NeutronCRUDInterfaces;
 import org.opendaylight.controller.networkconfig.neutron.NeutronPort;
 import org.opendaylight.controller.networkconfig.neutron.NeutronSubnet;
 import org.opendaylight.controller.networkconfig.neutron.Neutron_IPs;
 import org.opendaylight.controller.northbound.commons.RestMessages;
+import org.opendaylight.controller.northbound.commons.exception.BadRequestException;
+import org.opendaylight.controller.northbound.commons.exception.ResourceConflictException;
+import org.opendaylight.controller.northbound.commons.exception.ResourceNotFoundException;
 import org.opendaylight.controller.northbound.commons.exception.ServiceUnavailableException;
 import org.opendaylight.controller.sal.utils.ServiceHelper;
 
 /**
- * Open DOVE Northbound REST APIs.<br>
- * This class provides REST APIs for managing the open DOVE
+ * Neutron Northbound REST APIs.<br>
+ * This class provides REST APIs for managing neutron port objects
  *
  * <br>
  * <br>
@@ -59,6 +63,8 @@ import org.opendaylight.controller.sal.utils.ServiceHelper;
 @Path("/ports")
 public class NeutronPortsNorthbound {
 
+    final String mac_regex="^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$";
+
     private NeutronPort extractFields(NeutronPort o, List<String> fields) {
         return o.extractFields(fields);
     }
@@ -70,9 +76,9 @@ public class NeutronPortsNorthbound {
     @Produces({ MediaType.APPLICATION_JSON })
     //@TypeHint(OpenStackPorts.class)
     @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 401, condition = "Unauthorized"),
-            @ResponseCode(code = 501, condition = "Not Implemented") })
+        @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 401, condition = "Unauthorized"),
+        @ResponseCode(code = 501, condition = "Not Implemented") })
     public Response listPorts(
             // return fields
             @QueryParam("fields") List<String> fields,
@@ -92,7 +98,7 @@ public class NeutronPortsNorthbound {
             @QueryParam("page_reverse") String pageReverse
             // sorting not supported
             ) {
-        INeutronPortCRUD portInterface = NeutronNBInterfaces.getIfNBPortCRUD("default",this);
+        INeutronPortCRUD portInterface = NeutronCRUDInterfaces.getINeutronPortCRUD(this);
         if (portInterface == null) {
             throw new ServiceUnavailableException("Port CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
@@ -111,10 +117,11 @@ public class NeutronPortsNorthbound {
                     (queryDeviceID == null || queryDeviceID.equals(oSS.getDeviceID())) &&
                     (queryDeviceOwner == null || queryDeviceOwner.equals(oSS.getDeviceOwner())) &&
                     (queryTenantID == null || queryTenantID.equals(oSS.getTenantID()))) {
-                if (fields.size() > 0)
+                if (fields.size() > 0) {
                     ans.add(extractFields(oSS,fields));
-                else
+                } else {
                     ans.add(oSS);
+                }
             }
         }
         //TODO: apply pagination to results
@@ -130,28 +137,30 @@ public class NeutronPortsNorthbound {
     @Produces({ MediaType.APPLICATION_JSON })
     //@TypeHint(OpenStackPorts.class)
     @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 401, condition = "Unauthorized"),
-            @ResponseCode(code = 404, condition = "Not Found"),
-            @ResponseCode(code = 501, condition = "Not Implemented") })
+        @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 401, condition = "Unauthorized"),
+        @ResponseCode(code = 404, condition = "Not Found"),
+        @ResponseCode(code = 501, condition = "Not Implemented") })
     public Response showPort(
             @PathParam("portUUID") String portUUID,
             // return fields
             @QueryParam("fields") List<String> fields ) {
-        INeutronPortCRUD portInterface = NeutronNBInterfaces.getIfNBPortCRUD("default",this);
+        INeutronPortCRUD portInterface = NeutronCRUDInterfaces.getINeutronPortCRUD(this);
         if (portInterface == null) {
             throw new ServiceUnavailableException("Port CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
         }
-        if (!portInterface.portExists(portUUID))
-            return Response.status(404).build();
+        if (!portInterface.portExists(portUUID)) {
+            throw new ResourceNotFoundException("port UUID does not exist.");
+        }
         if (fields.size() > 0) {
             NeutronPort ans = portInterface.getPort(portUUID);
             return Response.status(200).entity(
                     new NeutronPortRequest(extractFields(ans, fields))).build();
-        } else
+        } else {
             return Response.status(200).entity(
                     new NeutronPortRequest(portInterface.getPort(portUUID))).build();
+        }
     }
 
     /**
@@ -162,26 +171,26 @@ public class NeutronPortsNorthbound {
     @Consumes({ MediaType.APPLICATION_JSON })
     //@TypeHint(OpenStackPorts.class)
     @StatusCodes({
-            @ResponseCode(code = 201, condition = "Created"),
-            @ResponseCode(code = 400, condition = "Bad Request"),
-            @ResponseCode(code = 401, condition = "Unauthorized"),
-            @ResponseCode(code = 403, condition = "Forbidden"),
-            @ResponseCode(code = 404, condition = "Not Found"),
-            @ResponseCode(code = 409, condition = "Conflict"),
-            @ResponseCode(code = 501, condition = "Not Implemented"),
-            @ResponseCode(code = 503, condition = "MAC generation failure") })
+        @ResponseCode(code = 201, condition = "Created"),
+        @ResponseCode(code = 400, condition = "Bad Request"),
+        @ResponseCode(code = 401, condition = "Unauthorized"),
+        @ResponseCode(code = 403, condition = "Forbidden"),
+        @ResponseCode(code = 404, condition = "Not Found"),
+        @ResponseCode(code = 409, condition = "Conflict"),
+        @ResponseCode(code = 501, condition = "Not Implemented"),
+        @ResponseCode(code = 503, condition = "MAC generation failure") })
     public Response createPorts(final NeutronPortRequest input) {
-        INeutronPortCRUD portInterface = NeutronNBInterfaces.getIfNBPortCRUD("default",this);
+        INeutronPortCRUD portInterface = NeutronCRUDInterfaces.getINeutronPortCRUD(this);
         if (portInterface == null) {
             throw new ServiceUnavailableException("Port CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
         }
-        INeutronNetworkCRUD networkInterface = NeutronNBInterfaces.getIfNBNetworkCRUD("default", this);
+        INeutronNetworkCRUD networkInterface = NeutronCRUDInterfaces.getINeutronNetworkCRUD( this);
         if (networkInterface == null) {
             throw new ServiceUnavailableException("Network CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
         }
-        INeutronSubnetCRUD subnetInterface = NeutronNBInterfaces.getIfNBSubnetCRUD("default", this);
+        INeutronSubnetCRUD subnetInterface = NeutronCRUDInterfaces.getINeutronSubnetCRUD( this);
         if (subnetInterface == null) {
             throw new ServiceUnavailableException("Subnet CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
@@ -193,24 +202,30 @@ public class NeutronPortsNorthbound {
              * the port must be part of an existing network, must not already exist,
              * have a valid MAC and the MAC not be in use
              */
-            if (singleton.getNetworkUUID() == null)
-                return Response.status(400).build();
-            if (portInterface.portExists(singleton.getID()))
-                return Response.status(400).build();
-            if (!networkInterface.networkExists(singleton.getNetworkUUID()))
-                return Response.status(404).build();
+            if (singleton.getNetworkUUID() == null) {
+                throw new BadRequestException("network UUID musy be specified");
+            }
+            if (portInterface.portExists(singleton.getID())) {
+                throw new BadRequestException("port UUID already exists");
+            }
+            if (!networkInterface.networkExists(singleton.getNetworkUUID())) {
+                throw new ResourceNotFoundException("network UUID does not exist.");
+            }
             if (singleton.getMacAddress() == null ||
-                    !singleton.getMacAddress().matches("^([0-9A-F]{2}[:-]){5}([0-9A-F]{2})$"))
-                return Response.status(400).build();
-            if (portInterface.macInUse(singleton.getMacAddress()))
-                return Response.status(409).build();
+                    !singleton.getMacAddress().matches(mac_regex)) {
+                throw new BadRequestException("MAC address not properly formatted");
+            }
+            if (portInterface.macInUse(singleton.getMacAddress())) {
+                throw new ResourceConflictException("MAC Address is in use.");
+            }
             Object[] instances = ServiceHelper.getGlobalInstances(INeutronPortAware.class, this, null);
             if (instances != null) {
                 for (Object instance : instances) {
                     INeutronPortAware service = (INeutronPortAware) instance;
                     int status = service.canCreatePort(singleton);
-                    if (status < 200 || status > 299)
+                    if (status < 200 || status > 299) {
                         return Response.status(status).build();
+                    }
                 }
             }
             /*
@@ -224,18 +239,23 @@ public class NeutronPortsNorthbound {
                 Iterator<Neutron_IPs> fixedIPIterator = fixedIPs.iterator();
                 while (fixedIPIterator.hasNext()) {
                     Neutron_IPs ip = fixedIPIterator.next();
-                    if (ip.getSubnetUUID() == null)
-                        return Response.status(400).build();
-                    if (!subnetInterface.subnetExists(ip.getSubnetUUID()))
-                        return Response.status(400).build();
+                    if (ip.getSubnetUUID() == null) {
+                        throw new BadRequestException("subnet UUID not specified");
+                    }
+                    if (!subnetInterface.subnetExists(ip.getSubnetUUID())) {
+                        throw new BadRequestException("subnet UUID must exists");
+                    }
                     NeutronSubnet subnet = subnetInterface.getSubnet(ip.getSubnetUUID());
-                    if (!singleton.getNetworkUUID().equalsIgnoreCase(subnet.getNetworkUUID()))
-                        return Response.status(400).build();
+                    if (!singleton.getNetworkUUID().equalsIgnoreCase(subnet.getNetworkUUID())) {
+                        throw new BadRequestException("network UUID must match that of subnet");
+                    }
                     if (ip.getIpAddress() != null) {
-                        if (!subnet.isValidIP(ip.getIpAddress()))
-                            return Response.status(400).build();
-                        if (subnet.isIPInUse(ip.getIpAddress()))
-                            return Response.status(409).build();
+                        if (!subnet.isValidIP(ip.getIpAddress())) {
+                            throw new BadRequestException("IP address is not valid");
+                        }
+                        if (subnet.isIPInUse(ip.getIpAddress())) {
+                            throw new ResourceConflictException("IP address is in use.");
+                        }
                     }
                 }
             }
@@ -252,7 +272,7 @@ public class NeutronPortsNorthbound {
             List<NeutronPort> bulk = input.getBulk();
             Iterator<NeutronPort> i = bulk.iterator();
             HashMap<String, NeutronPort> testMap = new HashMap<String, NeutronPort>();
-            Object[] instances = ServiceHelper.getGlobalInstances(INeutronSubnetAware.class, this, null);
+            Object[] instances = ServiceHelper.getGlobalInstances(INeutronPortAware.class, this, null);
             while (i.hasNext()) {
                 NeutronPort test = i.next();
 
@@ -261,33 +281,41 @@ public class NeutronPortsNorthbound {
                  * have a valid MAC and the MAC not be in use.  Further the bulk request
                  * can't already contain a new port with the same UUID
                  */
-                if (portInterface.portExists(test.getID()))
-                    return Response.status(400).build();
-                if (testMap.containsKey(test.getID()))
-                    return Response.status(400).build();
+                if (portInterface.portExists(test.getID())) {
+                    throw new BadRequestException("port UUID already exists");
+                }
+                if (testMap.containsKey(test.getID())) {
+                    throw new BadRequestException("port UUID already exists");
+                }
                 for (NeutronPort check : testMap.values()) {
-                    if (test.getMacAddress().equalsIgnoreCase(check.getMacAddress()))
-                        return Response.status(409).build();
+                    if (test.getMacAddress().equalsIgnoreCase(check.getMacAddress())) {
+                        throw new ResourceConflictException("MAC address already allocated");
+                    }
                     for (Neutron_IPs test_fixedIP : test.getFixedIPs()) {
                         for (Neutron_IPs check_fixedIP : check.getFixedIPs()) {
-                            if (test_fixedIP.getIpAddress().equals(check_fixedIP.getIpAddress()))
-                                return Response.status(409).build();
+                            if (test_fixedIP.getIpAddress().equals(check_fixedIP.getIpAddress())) {
+                                throw new ResourceConflictException("IP address already allocated");
+                            }
                         }
                     }
                 }
                 testMap.put(test.getID(), test);
-                if (!networkInterface.networkExists(test.getNetworkUUID()))
-                    return Response.status(404).build();
-                if (!test.getMacAddress().matches("^([0-9A-F]{2}[:-]){5}([0-9A-F]{2})$"))
-                    return Response.status(400).build();
-                if (portInterface.macInUse(test.getMacAddress()))
-                    return Response.status(409).build();
+                if (!networkInterface.networkExists(test.getNetworkUUID())) {
+                    throw new ResourceNotFoundException("network UUID does not exist.");
+                }
+                if (!test.getMacAddress().matches(mac_regex)) {
+                    throw new BadRequestException("MAC address not properly formatted");
+                }
+                if (portInterface.macInUse(test.getMacAddress())) {
+                    throw new ResourceConflictException("MAC address in use");
+                }
                 if (instances != null) {
                     for (Object instance : instances) {
                         INeutronPortAware service = (INeutronPortAware) instance;
                         int status = service.canCreatePort(test);
-                        if (status < 200 || status > 299)
+                        if (status < 200 || status > 299) {
                             return Response.status(status).build();
+                        }
                     }
                 }
                 /*
@@ -301,20 +329,25 @@ public class NeutronPortsNorthbound {
                     Iterator<Neutron_IPs> fixedIPIterator = fixedIPs.iterator();
                     while (fixedIPIterator.hasNext()) {
                         Neutron_IPs ip = fixedIPIterator.next();
-                        if (ip.getSubnetUUID() == null)
-                            return Response.status(400).build();
-                        if (!subnetInterface.subnetExists(ip.getSubnetUUID()))
-                            return Response.status(400).build();
+                        if (ip.getSubnetUUID() == null) {
+                            throw new BadRequestException("subnet UUID must be specified");
+                        }
+                        if (!subnetInterface.subnetExists(ip.getSubnetUUID())) {
+                            throw new BadRequestException("subnet UUID doesn't exists");
+                        }
                         NeutronSubnet subnet = subnetInterface.getSubnet(ip.getSubnetUUID());
-                        if (!test.getNetworkUUID().equalsIgnoreCase(subnet.getNetworkUUID()))
-                            return Response.status(400).build();
+                        if (!test.getNetworkUUID().equalsIgnoreCase(subnet.getNetworkUUID())) {
+                            throw new BadRequestException("network UUID must match that of subnet");
+                        }
                         if (ip.getIpAddress() != null) {
-                            if (!subnet.isValidIP(ip.getIpAddress()))
-                                return Response.status(400).build();
+                            if (!subnet.isValidIP(ip.getIpAddress())) {
+                                throw new BadRequestException("ip address not valid");
+                            }
                             //TODO: need to add consideration for a fixed IP being assigned the same address as a allocated IP in the
                             //same bulk create
-                            if (subnet.isIPInUse(ip.getIpAddress()))
-                                return Response.status(409).build();
+                            if (subnet.isIPInUse(ip.getIpAddress())) {
+                                throw new ResourceConflictException("IP address in use");
+                            }
                         }
                     }
                 }
@@ -345,49 +378,53 @@ public class NeutronPortsNorthbound {
     @Consumes({ MediaType.APPLICATION_JSON })
     //@TypeHint(OpenStackPorts.class)
     @StatusCodes({
-            @ResponseCode(code = 200, condition = "Operation successful"),
-            @ResponseCode(code = 400, condition = "Bad Request"),
-            @ResponseCode(code = 401, condition = "Unauthorized"),
-            @ResponseCode(code = 403, condition = "Forbidden"),
-            @ResponseCode(code = 404, condition = "Not Found"),
-            @ResponseCode(code = 409, condition = "Conflict"),
-            @ResponseCode(code = 501, condition = "Not Implemented") })
+        @ResponseCode(code = 200, condition = "Operation successful"),
+        @ResponseCode(code = 400, condition = "Bad Request"),
+        @ResponseCode(code = 401, condition = "Unauthorized"),
+        @ResponseCode(code = 403, condition = "Forbidden"),
+        @ResponseCode(code = 404, condition = "Not Found"),
+        @ResponseCode(code = 409, condition = "Conflict"),
+        @ResponseCode(code = 501, condition = "Not Implemented") })
     public Response updatePort(
             @PathParam("portUUID") String portUUID,
             NeutronPortRequest input
             ) {
-        INeutronPortCRUD portInterface = NeutronNBInterfaces.getIfNBPortCRUD("default",this);
+        INeutronPortCRUD portInterface = NeutronCRUDInterfaces.getINeutronPortCRUD(this);
         if (portInterface == null) {
             throw new ServiceUnavailableException("Port CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
         }
-        INeutronSubnetCRUD subnetInterface = NeutronNBInterfaces.getIfNBSubnetCRUD("default", this);
+        INeutronSubnetCRUD subnetInterface = NeutronCRUDInterfaces.getINeutronSubnetCRUD( this);
         if (subnetInterface == null) {
             throw new ServiceUnavailableException("Subnet CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         // port has to exist and only a single delta is supported
-        if (!portInterface.portExists(portUUID))
-            return Response.status(404).build();
+        if (!portInterface.portExists(portUUID)) {
+            throw new ResourceNotFoundException("port UUID does not exist.");
+        }
         NeutronPort target = portInterface.getPort(portUUID);
-        if (!input.isSingleton())
-            return Response.status(400).build();
+        if (!input.isSingleton()) {
+            throw new BadRequestException("only singleton edit suported");
+        }
         NeutronPort singleton = input.getSingleton();
         NeutronPort original = portInterface.getPort(portUUID);
 
         // deltas restricted by Neutron
         if (singleton.getID() != null || singleton.getTenantID() != null ||
-                singleton.getStatus() != null)
-            return Response.status(400).build();
+                singleton.getStatus() != null) {
+            throw new BadRequestException("attribute change blocked by Neutron");
+        }
 
         Object[] instances = ServiceHelper.getGlobalInstances(INeutronPortAware.class, this, null);
         if (instances != null) {
             for (Object instance : instances) {
                 INeutronPortAware service = (INeutronPortAware) instance;
                 int status = service.canUpdatePort(singleton, original);
-                if (status < 200 || status > 299)
+                if (status < 200 || status > 299) {
                     return Response.status(status).build();
+                }
             }
         }
 
@@ -397,23 +434,28 @@ public class NeutronPortsNorthbound {
             Iterator<Neutron_IPs> fixedIPIterator = fixedIPs.iterator();
             while (fixedIPIterator.hasNext()) {
                 Neutron_IPs ip = fixedIPIterator.next();
-                if (ip.getSubnetUUID() == null)
-                    return Response.status(400).build();
-                if (!subnetInterface.subnetExists(ip.getSubnetUUID()))
-                    return Response.status(400).build();
+                if (ip.getSubnetUUID() == null) {
+                    throw new BadRequestException("subnet UUID must be specified");
+                }
+                if (!subnetInterface.subnetExists(ip.getSubnetUUID())) {
+                    throw new BadRequestException("subnet UUID doesn't exist.");
+                }
                 NeutronSubnet subnet = subnetInterface.getSubnet(ip.getSubnetUUID());
-                if (!target.getNetworkUUID().equalsIgnoreCase(subnet.getNetworkUUID()))
-                    return Response.status(400).build();
+                if (!target.getNetworkUUID().equalsIgnoreCase(subnet.getNetworkUUID())) {
+                    throw new BadRequestException("network UUID must match that of subnet");
+                }
                 if (ip.getIpAddress() != null) {
-                    if (!subnet.isValidIP(ip.getIpAddress()))
-                        return Response.status(400).build();
-                    if (subnet.isIPInUse(ip.getIpAddress()))
-                        return Response.status(409).build();
+                    if (!subnet.isValidIP(ip.getIpAddress())) {
+                        throw new BadRequestException("invalid IP address");
+                    }
+                    if (subnet.isIPInUse(ip.getIpAddress())) {
+                        throw new ResourceConflictException("IP address in use");
+                    }
                 }
             }
         }
 
-//        TODO: Support change of security groups
+        //        TODO: Support change of security groups
         // update the port and return the modified object
         portInterface.updatePort(portUUID, singleton);
         NeutronPort updatedPort = portInterface.getPort(portUUID);
@@ -441,27 +483,30 @@ public class NeutronPortsNorthbound {
         @ResponseCode(code = 501, condition = "Not Implemented") })
     public Response deletePort(
             @PathParam("portUUID") String portUUID) {
-        INeutronPortCRUD portInterface = NeutronNBInterfaces.getIfNBPortCRUD("default",this);
+        INeutronPortCRUD portInterface = NeutronCRUDInterfaces.getINeutronPortCRUD(this);
         if (portInterface == null) {
             throw new ServiceUnavailableException("Port CRUD Interface "
                     + RestMessages.SERVICEUNAVAILABLE.toString());
         }
 
         // port has to exist and not be owned by anyone.  then it can be removed from the cache
-        if (!portInterface.portExists(portUUID))
-            return Response.status(404).build();
+        if (!portInterface.portExists(portUUID)) {
+            throw new ResourceNotFoundException("port UUID does not exist.");
+        }
         NeutronPort port = portInterface.getPort(portUUID);
         if (port.getDeviceID() != null ||
-                port.getDeviceOwner() != null)
+                port.getDeviceOwner() != null) {
             Response.status(403).build();
+        }
         NeutronPort singleton = portInterface.getPort(portUUID);
         Object[] instances = ServiceHelper.getGlobalInstances(INeutronPortAware.class, this, null);
         if (instances != null) {
             for (Object instance : instances) {
                 INeutronPortAware service = (INeutronPortAware) instance;
                 int status = service.canDeletePort(singleton);
-                if (status < 200 || status > 299)
+                if (status < 200 || status > 299) {
                     return Response.status(status).build();
+                }
             }
         }
         portInterface.removePort(portUUID);

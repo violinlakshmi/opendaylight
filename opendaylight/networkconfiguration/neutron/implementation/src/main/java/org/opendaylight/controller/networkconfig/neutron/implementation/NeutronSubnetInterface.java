@@ -8,14 +8,17 @@
 
 package org.opendaylight.controller.networkconfig.neutron.implementation;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Dictionary;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 import org.apache.felix.dm.Component;
@@ -23,19 +26,28 @@ import org.opendaylight.controller.clustering.services.CacheConfigException;
 import org.opendaylight.controller.clustering.services.CacheExistException;
 import org.opendaylight.controller.clustering.services.IClusterContainerServices;
 import org.opendaylight.controller.clustering.services.IClusterServices;
+import org.opendaylight.controller.configuration.ConfigurationObject;
+import org.opendaylight.controller.configuration.IConfigurationContainerAware;
+import org.opendaylight.controller.configuration.IConfigurationContainerService;
 import org.opendaylight.controller.networkconfig.neutron.INeutronNetworkCRUD;
 import org.opendaylight.controller.networkconfig.neutron.INeutronSubnetCRUD;
 import org.opendaylight.controller.networkconfig.neutron.NeutronCRUDInterfaces;
 import org.opendaylight.controller.networkconfig.neutron.NeutronNetwork;
 import org.opendaylight.controller.networkconfig.neutron.NeutronSubnet;
+import org.opendaylight.controller.sal.utils.IObjectReader;
+import org.opendaylight.controller.sal.utils.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class NeutronSubnetInterface implements INeutronSubnetCRUD {
+public class NeutronSubnetInterface implements INeutronSubnetCRUD, IConfigurationContainerAware,
+                                               IObjectReader {
     private static final Logger logger = LoggerFactory.getLogger(NeutronSubnetInterface.class);
+    private static final String FILE_NAME ="neutron.subnet.conf";
+
     private String containerName = null;
 
     private IClusterContainerServices clusterContainerService = null;
+    private IConfigurationContainerService configurationService;
     private ConcurrentMap<String, NeutronSubnet> subnetDB;
 
     // methods needed for creating caches
@@ -52,7 +64,16 @@ public class NeutronSubnetInterface implements INeutronSubnetCRUD {
         }
     }
 
-    @SuppressWarnings("deprecation")
+    public void setConfigurationContainerService(IConfigurationContainerService service) {
+        logger.trace("Configuration service set: {}", service);
+        this.configurationService = service;
+    }
+
+    public void unsetConfigurationContainerService(IConfigurationContainerService service) {
+        logger.trace("Configuration service removed: {}", service);
+        this.configurationService = null;
+    }
+
     private void allocateCache() {
         if (this.clusterContainerService == null) {
             logger.error("un-initialized clusterContainerService, can't create cache");
@@ -71,7 +92,7 @@ public class NeutronSubnetInterface implements INeutronSubnetCRUD {
         logger.debug("Cache successfully created for Neutron Subnets");
     }
 
-    @SuppressWarnings({ "unchecked", "deprecation" })
+    @SuppressWarnings({ "unchecked" })
     private void retrieveCache() {
         if (this.clusterContainerService == null) {
             logger.error("un-initialized clusterContainerService, can't retrieve cache");
@@ -87,7 +108,6 @@ public class NeutronSubnetInterface implements INeutronSubnetCRUD {
         logger.debug("Cache was successfully retrieved for Neutron Subnets");
     }
 
-    @SuppressWarnings("deprecation")
     private void destroyCache() {
         if (this.clusterContainerService == null) {
             logger.error("un-initialized clusterMger, can't destroy cache");
@@ -100,6 +120,7 @@ public class NeutronSubnetInterface implements INeutronSubnetCRUD {
     private void startUp() {
         allocateCache();
         retrieveCache();
+        loadConfiguration();
     }
 
     /**
@@ -176,16 +197,20 @@ public class NeutronSubnetInterface implements INeutronSubnetCRUD {
 
     // IfNBSubnetCRUD methods
 
+    @Override
     public boolean subnetExists(String uuid) {
         return subnetDB.containsKey(uuid);
     }
 
+    @Override
     public NeutronSubnet getSubnet(String uuid) {
-        if (!subnetExists(uuid))
+        if (!subnetExists(uuid)) {
             return null;
+        }
         return subnetDB.get(uuid);
     }
 
+    @Override
     public List<NeutronSubnet> getAllSubnets() {
         Set<NeutronSubnet> allSubnets = new HashSet<NeutronSubnet>();
         for (Entry<String, NeutronSubnet> entry : subnetDB.entrySet()) {
@@ -198,10 +223,12 @@ public class NeutronSubnetInterface implements INeutronSubnetCRUD {
         return ans;
     }
 
+    @Override
     public boolean addSubnet(NeutronSubnet input) {
         String id = input.getID();
-        if (subnetExists(id))
+        if (subnetExists(id)) {
             return false;
+        }
         subnetDB.putIfAbsent(id, input);
         INeutronNetworkCRUD networkIf = NeutronCRUDInterfaces.getINeutronNetworkCRUD(this);
 
@@ -210,9 +237,11 @@ public class NeutronSubnetInterface implements INeutronSubnetCRUD {
         return true;
     }
 
+    @Override
     public boolean removeSubnet(String uuid) {
-        if (!subnetExists(uuid))
+        if (!subnetExists(uuid)) {
             return false;
+        }
         NeutronSubnet target = subnetDB.get(uuid);
         INeutronNetworkCRUD networkIf = NeutronCRUDInterfaces.getINeutronNetworkCRUD(this);
 
@@ -222,17 +251,40 @@ public class NeutronSubnetInterface implements INeutronSubnetCRUD {
         return true;
     }
 
+    @Override
     public boolean updateSubnet(String uuid, NeutronSubnet delta) {
-        if (!subnetExists(uuid))
+        if (!subnetExists(uuid)) {
             return false;
+        }
         NeutronSubnet target = subnetDB.get(uuid);
         return overwrite(target, delta);
     }
 
+    @Override
     public boolean subnetInUse(String subnetUUID) {
-        if (!subnetExists(subnetUUID))
+        if (!subnetExists(subnetUUID)) {
             return true;
+        }
         NeutronSubnet target = subnetDB.get(subnetUUID);
         return (target.getPortsInSubnet().size() > 0);
     }
+
+    private void loadConfiguration() {
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, FILE_NAME)) {
+            NeutronSubnet ns = (NeutronSubnet) conf;
+            subnetDB.put(ns.getID(), ns);
+        }
+    }
+
+    @Override
+    public Status saveConfiguration() {
+        return configurationService.persistConfiguration(new ArrayList<ConfigurationObject>(subnetDB.values()),
+                FILE_NAME);
+    }
+
+    @Override
+    public Object readObject(ObjectInputStream ois) throws FileNotFoundException, IOException, ClassNotFoundException {
+        return ois.readObject();
+    }
+
 }

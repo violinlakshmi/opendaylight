@@ -22,6 +22,13 @@
  */
 package org.infinispan.interceptors.distribution;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.infinispan.CacheException;
 import org.infinispan.commands.FlagAffectedCommand;
 import org.infinispan.commands.remote.ClusteredGetCommand;
@@ -47,7 +54,6 @@ import org.infinispan.transaction.xa.GlobalTransaction;
 import org.infinispan.util.logging.Log;
 import org.infinispan.util.logging.LogFactory;
 
-import java.util.*;
 
 /**
  * Base class for distribution of entries across a cluster.
@@ -134,9 +140,9 @@ public abstract class BaseDistributionInterceptor extends ClusteringInterceptor 
                 rpcManager.invokeRemotely(recipientGenerator.generateRecipients(), command,
                         rpcManager.getDefaultRpcOptions(isSync));
             } else {
-                log.errorf("Didn't invoke RPC because primaryOwner (%s) didn't match this node (%s)", primaryOwner,
+                log.tracef("Didn't invoke RPC because primaryOwner (%s) didn't match this node (%s)", primaryOwner,
                            rpcManager.getAddress());
-                log.errorf("Hashcode is (%s) for Key (%s) .. it could be inconsistent in the cluster!",
+                log.tracef("Hashcode is (%s) for Key (%s)",
                            command.getKey().hashCode(), command.getKey());
             }
          return returnValue;

@@ -19,13 +19,12 @@ package org.opendaylight.controller.sal.core;
 import java.util.UUID;
 import org.junit.Assert;
 import org.junit.Test;
-import org.opendaylight.controller.sal.core.ConstructionException;
-import org.opendaylight.controller.sal.core.Node;
 
 public class NodeTest {
     @Test
     public void testNodeOpenFlowOfWrongType() {
         try {
+            @SuppressWarnings("unused")
             Node of1 = new Node(Node.NodeIDType.OPENFLOW, new String(
                     "0xDEADBEEFCAFE0001L"));
 
@@ -43,6 +42,7 @@ public class NodeTest {
     @Test
     public void testNodeONEPKOfWrongType() {
         try {
+            @SuppressWarnings("unused")
             Node onepk1 = new Node(Node.NodeIDType.ONEPK, new Long(
                     0xDEADBEEFCAFE0001L));
 
@@ -60,6 +60,7 @@ public class NodeTest {
     @Test
     public void testNodePCEPOfWrongType() {
         try {
+            @SuppressWarnings("unused")
             Node pcep1 = new Node(Node.NodeIDType.PCEP, new Long(
                     0xDEADBEEFCAFE0001L));
 
@@ -413,6 +414,7 @@ public class NodeTest {
         // created
         Node.NodeIDType.unRegisterIDType("FOO");
         try {
+            @SuppressWarnings("unused")
             Node n = new Node("FOO", new Integer(0xCAFE));
 
             // If we reach here, something didn't go fine, an

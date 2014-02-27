@@ -7,10 +7,18 @@
  */
 package org.opendaylight.controller.sal.core.api.data;
 
+import org.opendaylight.controller.md.sal.common.api.data.DataProvisionService;
 import org.opendaylight.controller.sal.common.DataStoreIdentifier;
 import org.opendaylight.controller.sal.core.api.Provider;
+import org.opendaylight.yangtools.concepts.Registration;
+import org.opendaylight.yangtools.yang.data.api.CompositeNode;
+import org.opendaylight.yangtools.yang.data.api.InstanceIdentifier;
+import org.opendaylight.controller.md.sal.common.api.data.DataReader;;
 
-public interface DataProviderService extends DataBrokerService {
+public interface DataProviderService extends 
+    DataBrokerService, //
+    DataProvisionService<InstanceIdentifier, CompositeNode>
+    {
 
     /**
      * Adds {@link DataValidator} for specified Data Store
@@ -33,23 +41,6 @@ public interface DataProviderService extends DataBrokerService {
             DataValidator validator);
 
     /**
-     * Adds {@link DataCommitHandler} for specified data store
-     * 
-     * @param store
-     * @param provider
-     */
-    void addCommitHandler(DataStoreIdentifier store, DataCommitHandler provider);
-
-    /**
-     * Removes {@link DataCommitHandler} from specified data store
-     * 
-     * @param store
-     * @param provider
-     */
-    void removeCommitHandler(DataStoreIdentifier store,
-            DataCommitHandler provider);
-
-    /**
      * Adds {@link DataRefresher} for specified data store
      * 
      * @param store
@@ -65,6 +56,11 @@ public interface DataProviderService extends DataBrokerService {
      */
     void removeRefresher(DataStoreIdentifier store, DataRefresher refresher);
 
+    
+    Registration<DataReader<InstanceIdentifier, CompositeNode>> registerConfigurationReader(InstanceIdentifier path, DataReader<InstanceIdentifier, CompositeNode> reader);
+
+    Registration<DataReader<InstanceIdentifier, CompositeNode>> registerOperationalReader(InstanceIdentifier path, DataReader<InstanceIdentifier, CompositeNode> reader);
+    
     public interface DataRefresher extends Provider.ProviderFunctionality {
 
         /**

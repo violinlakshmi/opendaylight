@@ -8,6 +8,7 @@ repository
 workspace
 *~
 target
+target-ide
 .classpath
 .project
 .settings
@@ -17,4 +18,6 @@ opendaylight/northbound/integrationtest/logs/*
 *.iml
 *.iws
 .idea
-
+xtend-gen
+classes
+out/

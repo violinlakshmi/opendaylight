@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2014 Cisco Systems, Inc. and others.  All rights reserved.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.opendaylight.controller.northbound.integrationtest;
 
 import static org.junit.Assert.assertFalse;
@@ -8,19 +15,13 @@ import static org.ops4j.pax.exam.CoreOptions.options;
 import static org.ops4j.pax.exam.CoreOptions.systemPackages;
 import static org.ops4j.pax.exam.CoreOptions.systemProperty;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-
 import javax.inject.Inject;
 
 import org.apache.commons.codec.binary.Base64;
@@ -32,6 +33,9 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.opendaylight.controller.commons.httpclient.HTTPClient;
+import org.opendaylight.controller.commons.httpclient.HTTPRequest;
+import org.opendaylight.controller.commons.httpclient.HTTPResponse;
 import org.opendaylight.controller.hosttracker.IfIptoHost;
 import org.opendaylight.controller.sal.core.Bandwidth;
 import org.opendaylight.controller.sal.core.ConstructionException;
@@ -46,8 +50,8 @@ import org.opendaylight.controller.sal.topology.IListenTopoUpdates;
 import org.opendaylight.controller.sal.topology.TopoEdgeUpdate;
 import org.opendaylight.controller.switchmanager.IInventoryListener;
 import org.opendaylight.controller.usermanager.IUserManager;
+import org.ops4j.pax.exam.Configuration;
 import org.ops4j.pax.exam.Option;
-import org.ops4j.pax.exam.junit.Configuration;
 import org.ops4j.pax.exam.junit.PaxExam;
 import org.ops4j.pax.exam.util.PathUtils;
 import org.osgi.framework.Bundle;
@@ -65,7 +69,7 @@ public class NorthboundIT {
     private IUserManager userManager = null;
     private IInventoryListener invtoryListener = null;
     private IListenTopoUpdates topoUpdates = null;
-
+    private static final String baseUrlPrefix = "http://127.0.0.1:8080/controller/nb/v2/";
     private final Boolean debugMsg = false;
 
     private String stateToString(int state) {
@@ -149,53 +153,51 @@ public class NorthboundIT {
         }
 
         try {
-            URL url = new URL(restUrl);
             this.userManager.getAuthorizationList();
             this.userManager.authenticate("admin", "admin");
+            HTTPRequest request = new HTTPRequest();
+
+            request.setUri(restUrl);
+            request.setMethod(method);
+            request.setTimeout(0);  // HostTracker doesn't respond
+                                    // within default timeout during
+                                    // IT so setting an indefinite
+                                    // timeout till the issue is
+                                    // sorted out
+
+            Map<String, List<String>> headers = new HashMap<String, List<String>>();
             String authString = "admin:admin";
             byte[] authEncBytes = Base64.encodeBase64(authString.getBytes());
             String authStringEnc = new String(authEncBytes);
-
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod(method);
-            connection.setRequestProperty("Authorization", "Basic " + authStringEnc);
-            connection.setRequestProperty("Content-Type", "application/json");
-            connection.setRequestProperty("Accept", "application/json");
-
+            List<String> header = new ArrayList<String>();
+            header.add("Basic "+authStringEnc);
+            headers.put("Authorization", header);
+            header = new ArrayList<String>();
+            header.add("application/json");
+            headers.put("Accept", header);
+            request.setHeaders(headers);
+            request.setContentType("application/json");
             if (body != null) {
-                connection.setDoOutput(true);
-                OutputStreamWriter wr = new OutputStreamWriter(connection.getOutputStream());
-                wr.write(body);
-                wr.flush();
+                request.setEntity(body);
             }
-            connection.connect();
-            connection.getContentType();
+
+            HTTPResponse response = HTTPClient.sendRequest(request);
 
             // Response code for success should be 2xx
-            httpResponseCode = connection.getResponseCode();
+            httpResponseCode = response.getStatus();
             if (httpResponseCode > 299) {
                 return httpResponseCode.toString();
             }
 
             if (debugMsg) {
-                System.out.println("HTTP response code: " + connection.getResponseCode());
-                System.out.println("HTTP response message: " + connection.getResponseMessage());
+                System.out.println("HTTP response code: " + response.getStatus());
+                System.out.println("HTTP response message: " + response.getEntity());
             }
-
-            InputStream is = connection.getInputStream();
-            BufferedReader rd = new BufferedReader(new InputStreamReader(is, Charset.forName("UTF-8")));
-            StringBuilder sb = new StringBuilder();
-            int cp;
-            while ((cp = rd.read()) != -1) {
-                sb.append((char) cp);
-            }
-            is.close();
-            connection.disconnect();
-            if (debugMsg) {
-                System.out.println("Response : "+sb.toString());
-            }
-            return sb.toString();
+            return response.getEntity();
         } catch (Exception e) {
+            if (debugMsg) {
+                e.printStackTrace();
+            }
             return null;
         }
     }
@@ -272,7 +274,7 @@ public class NorthboundIT {
     @Test
     public void testSubnetsNorthbound() throws JSONException, ConstructionException {
         System.out.println("Starting Subnets JAXB client.");
-        String baseURL = "http://127.0.0.1:8080/controller/nb/v2/subnetservice/";
+        String baseURL = baseUrlPrefix + "subnetservice/";
 
         String name1 = "testSubnet1";
         String subnet1 = "1.1.1.1/24";
@@ -313,7 +315,7 @@ public class NorthboundIT {
         JSONTokener jt = new JSONTokener(result);
         JSONObject json = new JSONObject(jt);
         JSONArray subnetConfigs = json.getJSONArray("subnetConfig");
-        Assert.assertEquals(subnetConfigs.length(), 0);
+        Assert.assertEquals(subnetConfigs.length(), 1); // should only get the default subnet
 
         // Test GET subnet1 expecting 404
         result = getJsonResult(baseURL + "default/subnet/" + name1);
@@ -415,7 +417,7 @@ public class NorthboundIT {
     @Test
     public void testStaticRoutingNorthbound() throws JSONException {
         System.out.println("Starting StaticRouting JAXB client.");
-        String baseURL = "http://127.0.0.1:8080/controller/nb/v2/staticroute/";
+        String baseURL = baseUrlPrefix + "staticroute/";
 
         String name1 = "testRoute1";
         String prefix1 = "192.168.1.1/24";
@@ -496,7 +498,7 @@ public class NorthboundIT {
     @Test
     public void testSwitchManager() throws JSONException {
         System.out.println("Starting SwitchManager JAXB client.");
-        String baseURL = "http://127.0.0.1:8080/controller/nb/v2/switchmanager/default/";
+        String baseURL = baseUrlPrefix + "switchmanager/default/";
 
         // define Node/NodeConnector attributes for test
         int nodeId_1 = 51966;
@@ -647,7 +649,7 @@ public class NorthboundIT {
                 "SET_NW_SRC", "SET_NW_DST", "SET_NW_TOS", "SET_TP_SRC", "SET_TP_DST" };
         System.out.println("Starting Statistics JAXB client.");
 
-        String baseURL = "http://127.0.0.1:8080/controller/nb/v2/statistics/default/";
+        String baseURL = baseUrlPrefix + "statistics/default/";
 
         String result = getJsonResult(baseURL + "flow");
         JSONTokener jt = new JSONTokener(result);
@@ -838,7 +840,7 @@ public class NorthboundIT {
     @Test
     public void testFlowProgrammer() throws JSONException {
         System.out.println("Starting FlowProgrammer JAXB client.");
-        String baseURL = "http://127.0.0.1:8080/controller/nb/v2/flowprogrammer/default/";
+        String baseURL = baseUrlPrefix + "flowprogrammer/default/";
         // Attempt to get a flow that doesn't exit. Should return 404
         // status.
         String result = getJsonResult(baseURL + "node/STUB/51966/staticFlow/test1", "GET");
@@ -862,10 +864,11 @@ public class NorthboundIT {
         JSONObject node = json.getJSONObject("node");
         Assert.assertEquals(node.getString("type"), "STUB");
         Assert.assertEquals(node.getString("id"), "51966");
-        // test adding same flow again fails due to repeat name..return 409
+        // test adding same flow again succeeds with a change in any field ..return Success
         // code
+        fc = "{\"name\":\"test1\", \"node\":{\"id\":\"51966\",\"type\":\"STUB\"}, \"actions\":[\"LOOPBACK\"]}";
         result = getJsonResult(baseURL + "node/STUB/51966/staticFlow/test1", "PUT", fc);
-        Assert.assertTrue(result.equals("409"));
+        Assert.assertTrue(result.contains("Success"));
 
         fc = "{\"name\":\"test2\", \"node\":{\"id\":\"51966\",\"type\":\"STUB\"}, \"actions\":[\"DROP\"]}";
         result = getJsonResult(baseURL + "node/STUB/51966/staticFlow/test2", "PUT", fc);
@@ -976,7 +979,7 @@ public class NorthboundIT {
         Integer nodeConnectorId_2 = 34;
         String vlan_2 = "123";
 
-        String baseURL = "http://127.0.0.1:8080/controller/nb/v2/hosttracker/default";
+        String baseURL = baseUrlPrefix + "hosttracker/default";
 
         // test PUT method: addHost()
         JSONObject fc_json = new JSONObject();
@@ -1130,14 +1133,14 @@ public class NorthboundIT {
         } else {
             JSONObject ja = json.getJSONObject("hostConfig");
             String na = ja.getString("networkAddress");
-            return (na.equalsIgnoreCase(hostIp)) ? true : false;
+            return na.equalsIgnoreCase(hostIp);
         }
     }
 
     @Test
     public void testTopology() throws JSONException, ConstructionException {
         System.out.println("Starting Topology JAXB client.");
-        String baseURL = "http://127.0.0.1:8080/controller/nb/v2/topology/default";
+        String baseURL = baseUrlPrefix + "topology/default";
 
         // === test GET method for getTopology()
         short state_1 = State.EDGE_UP, state_2 = State.EDGE_DOWN;
@@ -1381,6 +1384,7 @@ public class NorthboundIT {
                 mavenBundle("org.opendaylight.controller", "forwarding.staticrouting").versionAsInProject(),
                 mavenBundle("org.opendaylight.controller", "bundlescanner").versionAsInProject(),
                 mavenBundle("org.opendaylight.controller", "bundlescanner.implementation").versionAsInProject(),
+                mavenBundle("org.opendaylight.controller", "commons.httpclient").versionAsInProject(),
 
                 // Northbound bundles
                 mavenBundle("org.opendaylight.controller", "commons.northbound").versionAsInProject(),
@@ -1392,10 +1396,13 @@ public class NorthboundIT {
                 mavenBundle("org.opendaylight.controller", "flowprogrammer.northbound").versionAsInProject(),
                 mavenBundle("org.opendaylight.controller", "subnets.northbound").versionAsInProject(),
 
-                mavenBundle("org.codehaus.jackson", "jackson-mapper-asl").versionAsInProject(),
-                mavenBundle("org.codehaus.jackson", "jackson-core-asl").versionAsInProject(),
-                mavenBundle("org.codehaus.jackson", "jackson-jaxrs").versionAsInProject(),
-                mavenBundle("org.codehaus.jackson", "jackson-xc").versionAsInProject(),
+                mavenBundle("com.fasterxml.jackson.core", "jackson-annotations").versionAsInProject(),
+                mavenBundle("com.fasterxml.jackson.core", "jackson-core").versionAsInProject(),
+                mavenBundle("com.fasterxml.jackson.core", "jackson-databind").versionAsInProject(),
+                mavenBundle("com.fasterxml.jackson.jaxrs", "jackson-jaxrs-json-provider").versionAsInProject(),
+                mavenBundle("com.fasterxml.jackson.jaxrs", "jackson-jaxrs-base").versionAsInProject(),
+                mavenBundle("com.fasterxml.jackson.module", "jackson-module-jaxb-annotations").versionAsInProject(),
+
                 mavenBundle("org.codehaus.jettison", "jettison").versionAsInProject(),
 
                 mavenBundle("commons-io", "commons-io").versionAsInProject(),
@@ -1494,7 +1501,7 @@ public class NorthboundIT {
                 mavenBundle("com.sun.jersey", "jersey-client").versionAsInProject(),
                 mavenBundle("com.sun.jersey", "jersey-server").versionAsInProject().startLevel(2),
                 mavenBundle("com.sun.jersey", "jersey-core").versionAsInProject().startLevel(2),
-                mavenBundle("com.sun.jersey", "jersey-json").versionAsInProject().startLevel(2), junitBundles());
+                junitBundles());
     }
 
 }

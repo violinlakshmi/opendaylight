@@ -11,7 +11,6 @@ package org.opendaylight.controller.arphandler;
 
 import java.net.InetAddress;
 
-import org.opendaylight.controller.arphandler.ARPEvent;
 import org.opendaylight.controller.hosttracker.hostAware.HostNodeConnector;
 import org.opendaylight.controller.switchmanager.Subnet;
 /*
@@ -20,6 +19,7 @@ import org.opendaylight.controller.switchmanager.Subnet;
  * specified host
  */
 public class ARPRequest extends ARPEvent {
+    private static final long serialVersionUID = 1L;
     private final Subnet subnet;
     private final HostNodeConnector host;
 

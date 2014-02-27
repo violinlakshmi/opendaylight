@@ -166,10 +166,9 @@ public class SimpleForwardingImpl implements IfNewHostNotify,
         destroyCaches();
     }
 
-    @SuppressWarnings("deprecation")
-        private void allocateCaches() {
+    private void allocateCaches() {
         if (this.clusterContainerService == null) {
-            log.info("un-initialized clusterContainerService, can't create cache");
+            log.trace("un-initialized clusterContainerService, can't create cache");
             return;
         }
 
@@ -183,10 +182,10 @@ public class SimpleForwardingImpl implements IfNewHostNotify,
         }
     }
 
-    @SuppressWarnings({ "unchecked", "deprecation" })
+    @SuppressWarnings({ "unchecked" })
     private void retrieveCaches() {
         if (this.clusterContainerService == null) {
-            log.info("un-initialized clusterContainerService, can't retrieve cache");
+            log.trace("un-initialized clusterContainerService, can't retrieve cache");
             return;
         }
 
@@ -197,10 +196,9 @@ public class SimpleForwardingImpl implements IfNewHostNotify,
         }
     }
 
-    @SuppressWarnings("deprecation")
-        private void destroyCaches() {
+    private void destroyCaches() {
         if (this.clusterContainerService == null) {
-            log.info("un-initialized clusterContainerService, can't destroy cache");
+            log.trace("un-initialized clusterContainerService, can't destroy cache");
             return;
         }
 
@@ -636,7 +634,7 @@ public class SimpleForwardingImpl implements IfNewHostNotify,
                 po = e.getValue();
                 if (po != null) {
                     // Populate the Policy field now
-                    Status poStatus = this.frm.installFlowEntry(po);
+                    Status poStatus = this.frm.modifyOrAddFlowEntry(po);
                     if (!poStatus.isSuccess()) {
                         log.error("Failed to install policy: "
                                 + po.getGroupName() + " ("
@@ -802,8 +800,7 @@ public class SimpleForwardingImpl implements IfNewHostNotify,
         log.debug("Host Facing Port in a container came up, install the rules for all hosts from this port !");
         Set<HostNodeConnector> allHosts = this.hostTracker.getAllHosts();
         for (HostNodeConnector host : allHosts) {
-            if (node.equals(host.getnodeconnectorNode())
-                    && swPort.equals(host.getnodeConnector())) {
+            if (node.equals(host.getnodeconnectorNode())) {
                 /*
                  * This host resides behind the same switch and port for which a port up
                  * message is received. Ideally this should not happen, but if it does,
@@ -844,8 +841,9 @@ public class SimpleForwardingImpl implements IfNewHostNotify,
     @Override
     public void notifyNode(Node node, UpdateType type,
             Map<String, Property> propMap) {
-        if (node == null)
+        if (node == null) {
             return;
+        }
 
         switch (type) {
         case REMOVED:
@@ -860,8 +858,9 @@ public class SimpleForwardingImpl implements IfNewHostNotify,
     @Override
     public void notifyNodeConnector(NodeConnector nodeConnector,
             UpdateType type, Map<String, Property> propMap) {
-        if (nodeConnector == null)
+        if (nodeConnector == null) {
             return;
+        }
 
         boolean up = false;
         switch (type) {

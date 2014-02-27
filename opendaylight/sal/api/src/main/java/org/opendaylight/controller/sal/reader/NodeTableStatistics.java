@@ -37,6 +37,8 @@ public class NodeTableStatistics implements Serializable {
     private long lookupCount;
     @XmlElement
     private long matchedCount;
+    @XmlElement
+    private int maximumEntries;
 
 
     @Override
@@ -46,6 +48,7 @@ public class NodeTableStatistics implements Serializable {
         result = prime * result + activeCount;
         result = prime * result + (int) (lookupCount ^ (lookupCount >>> 32));
         result = prime * result + (int) (matchedCount ^ (matchedCount >>> 32));
+        result = prime * result + maximumEntries;
         result = prime * result + ((name == null) ? 0 : name.hashCode());
         result = prime * result + ((nodeTable == null) ? 0 : nodeTable.hashCode());
         return result;
@@ -70,6 +73,9 @@ public class NodeTableStatistics implements Serializable {
             return false;
         }
         if (matchedCount != other.matchedCount) {
+            return false;
+        }
+        if (maximumEntries != other.maximumEntries) {
             return false;
         }
         if (name == null) {
@@ -164,11 +170,26 @@ public class NodeTableStatistics implements Serializable {
         this.matchedCount = matchedCount;
     }
 
+    /**
+     * @return the maximumEntries
+     */
+    public int getMaximumEntries() {
+        return maximumEntries;
+    }
+
+    /**
+     * @param maximumEntries the maximumEntries to set
+     */
+    public void setMaximumEntries(int maximumEntries) {
+        this.maximumEntries = maximumEntries;
+    }
+
     @Override
     public String toString() {
         return "NodeTableStats[tableId = " + nodeTable
                 + ", activeCount = " + activeCount
                 + ", lookupCount = " + lookupCount
-                + ", matchedCount = " + matchedCount + "]";
+                + ", matchedCount = " + matchedCount
+                + ", maximumEntries = " + maximumEntries + "]";
     }
 }

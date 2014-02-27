@@ -10,17 +10,26 @@ fi
 
 if [[ $platform == 'linux' ]]; then
    fullpath=`readlink -f $0`
+
+   if [[ -z ${JAVA_HOME} ]]; then
+      # Find the actual location of the Java launcher:
+      java_launcher=`which java`
+      java_launcher=`readlink -f "${java_launcher}"`
+
+      # Compute the Java home from the location of the Java launcher:
+      export JAVA_HOME="${java_launcher%/bin/java}"
+    fi
 elif [[ $platform == 'osx' ]]; then
    TARGET_FILE=$0
-   cd `dirname $TARGET_FILE`
+   cd `dirname "$TARGET_FILE"`
    TARGET_FILE=`basename $TARGET_FILE`
 
    # Iterate down a (possible) chain of symlinks
    while [ -L "$TARGET_FILE" ]
    do
-       TARGET_FILE=`readlink $TARGET_FILE`
-       cd `dirname $TARGET_FILE`
-       TARGET_FILE=`basename $TARGET_FILE`
+       TARGET_FILE=`readlink "$TARGET_FILE"`
+       cd `dirname "$TARGET_FILE"`
+       TARGET_FILE=`basename "$TARGET_FILE"`
    done
 
    # Compute the canonicalized name by finding the physical path
@@ -37,10 +46,20 @@ fi
 [[ ! -x ${JAVA_HOME}/bin/java ]] && echo "Cannot find an executable \
 JVM at path ${JAVA_HOME}/bin/java check your JAVA_HOME" && exit -1;
 
-basedir=`dirname ${fullpath}`
+if [ -z ${ODL_BASEDIR} ]; then
+    basedir=`dirname "${fullpath}"`
+else
+    basedir=${ODL_BASEDIR}
+fi
+
+if [ -z ${ODL_DATADIR} ]; then
+    datadir=`dirname "${fullpath}"`
+else
+    datadir=${ODL_DATADIR}
+fi
 
 function usage {
-    echo "Usage: $0 [-jmx] [-jmxport <num>] [-debug] [-debugsuspend] [-debugport <num>] [-start [<console port>]] [-stop] [-status] [-console] [-help] [<other args will automatically be used for the JVM>]"
+    echo "Usage: $0 [-jmx] [-jmxport <num>] [-debug] [-debugsuspend] [-debugport <num>] [-start [<console port>]] [-stop] [-status] [-console] [-help] [-agentpath:<path to lib>] [<other args will automatically be used for the JVM>]"
     exit 1
 }
 
@@ -64,6 +83,7 @@ statusdaemon=0
 consolestart=1
 dohelp=0
 extraJVMOpts=""
+agentPath=""
 unknown_option=0
 while true ; do
     case "$1" in
@@ -79,6 +99,7 @@ while true ; do
         -help) dohelp=1; shift;;
         -D*) extraJVMOpts="${extraJVMOpts} $1"; shift;;
         -X*) extraJVMOpts="${extraJVMOpts} $1"; shift;;
+        -agentpath:*) agentPath="$1"; shift;;
         "") break ;;
         *) echo "Unknown option $1"; unknown_option=1; shift ;;
     esac
@@ -126,8 +147,8 @@ fi
 ########################################
 # Now add to classpath the OSGi JAR
 ########################################
-CLASSPATH=${basedir}/lib/org.eclipse.osgi-3.8.1.v20120830-144521.jar
-FWCLASSPATH=file:${basedir}/lib/org.eclipse.osgi-3.8.1.v20120830-144521.jar
+CLASSPATH="${basedir}"/lib/org.eclipse.osgi-3.8.1.v20120830-144521.jar
+FWCLASSPATH=file:"${basedir}"/lib/org.eclipse.osgi-3.8.1.v20120830-144521.jar
 
 ########################################
 # Now add the extensions
@@ -144,6 +165,8 @@ FWCLASSPATH=${FWCLASSPATH},file:${basedir}/lib/org.eclipse.virgo.kernel.equinox.
 ########################################
 CLASSPATH=${CLASSPATH}:${basedir}/lib/org.eclipse.equinox.launcher-1.3.0.v20120522-1813.jar
 FWCLASSPATH=${FWCLASSPATH},file:${basedir}/lib/org.eclipse.equinox.launcher-1.3.0.v20120522-1813.jar
+
+cd $basedir
 
 if [ "${stopdaemon}" -eq 1 ]; then
     if [ -e "${pidfile}" ]; then
@@ -169,7 +192,7 @@ if [ "${statusdaemon}" -eq 1 ]; then
         else
             echo "Controller with PID: ${daemonpid} -- Doesn't seem to exist"
             rm -f "${pidfile}"
-            exit 0
+            exit 1
         fi
     else
         echo "Doesn't seem any Controller daemon is currently running, at least no PID file has been found"
@@ -177,18 +200,25 @@ if [ "${statusdaemon}" -eq 1 ]; then
     fi
 fi
 
+iotmpdir=`echo "${datadir}" | sed 's/ /\\ /g'`
+bdir=`echo "${basedir}" | sed 's/ /\\ /g'`
+confarea=`echo "${datadir}" | sed 's/ /\\ /g'`
+fwclasspath=`echo "${FWCLASSPATH}" | sed 's/ /\\ /g'`
+
 if [ "${startdaemon}" -eq 1 ]; then
     if [ -e "${pidfile}" ]; then
         echo "Another instance of controller running, check with $0 -status"
         exit -1
     fi
     $JAVA_HOME/bin/java ${extraJVMOpts} \
-        -Djava.io.tmpdir=${basedir}/work/tmp \
-        -Dosgi.install.area=${basedir} \
-        -Dosgi.configuration.area=${basedir}/configuration \
-        -Dosgi.frameworkClassPath=${FWCLASSPATH} \
-        -Dosgi.framework=file:${basedir}/lib/org.eclipse.osgi-3.8.1.v20120830-144521.jar \
-        -classpath ${CLASSPATH} \
+        ${agentPath} \
+        -Djava.io.tmpdir="${iotmpdir}/work/tmp" \
+        -Dosgi.install.area="${bdir}" \
+        -Dosgi.configuration.area="${confarea}/configuration" \
+        -Dosgi.frameworkClassPath="${fwclasspath}" \
+        -Dosgi.framework=file:"${bdir}/lib/org.eclipse.osgi-3.8.1.v20120830-144521.jar" \
+        -Djava.awt.headless=true \
+        -classpath "${CLASSPATH}" \
         org.eclipse.equinox.launcher.Main \
         -console ${daemonport} \
         -consoleLog &
@@ -200,12 +230,14 @@ elif [ "${consolestart}" -eq 1 ]; then
         exit -1
     fi
     $JAVA_HOME/bin/java ${extraJVMOpts} \
-        -Djava.io.tmpdir=${basedir}/work/tmp \
-        -Dosgi.install.area=${basedir} \
-        -Dosgi.configuration.area=${basedir}/configuration \
-        -Dosgi.frameworkClassPath=${FWCLASSPATH} \
-        -Dosgi.framework=file:${basedir}/lib/org.eclipse.osgi-3.8.1.v20120830-144521.jar \
-        -classpath ${CLASSPATH} \
+        ${agentPath} \
+        -Djava.io.tmpdir="${iotmpdir}/work/tmp" \
+        -Dosgi.install.area="${bdir}" \
+        -Dosgi.configuration.area="${confarea}/configuration" \
+        -Dosgi.frameworkClassPath="${fwclasspath}" \
+        -Dosgi.framework=file:"${bdir}/lib/org.eclipse.osgi-3.8.1.v20120830-144521.jar" \
+        -Djava.awt.headless=true \
+        -classpath "${CLASSPATH}" \
         org.eclipse.equinox.launcher.Main \
         -console \
         -consoleLog

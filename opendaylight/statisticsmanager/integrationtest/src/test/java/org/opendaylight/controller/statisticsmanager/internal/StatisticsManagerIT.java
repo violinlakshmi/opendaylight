@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2014 Cisco Systems, Inc. and others.  All rights reserved.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.opendaylight.controller.statisticsmanager.internal;
 
 import static org.junit.Assert.assertFalse;
@@ -35,7 +42,7 @@ import org.opendaylight.controller.sal.reader.NodeConnectorStatistics;
 import org.opendaylight.controller.sal.reader.NodeDescription;
 import org.opendaylight.controller.statisticsmanager.IStatisticsManager;
 import org.ops4j.pax.exam.Option;
-import org.ops4j.pax.exam.junit.Configuration;
+import org.ops4j.pax.exam.Configuration;
 import org.ops4j.pax.exam.junit.PaxExam;
 import org.ops4j.pax.exam.util.PathUtils;
 import org.osgi.framework.Bundle;
@@ -116,6 +123,14 @@ public class StatisticsManagerIT {
                     .versionAsInProject(),
                 mavenBundle("org.opendaylight.controller", "forwardingrulesmanager")
                     .versionAsInProject(),
+                mavenBundle("org.opendaylight.controller", "connectionmanager.implementation").
+                    versionAsInProject(),
+                mavenBundle("org.opendaylight.controller",  "connectionmanager").
+                    versionAsInProject(),
+                mavenBundle("org.opendaylight.controller",  "sal.connection").
+                    versionAsInProject(),
+                mavenBundle("org.opendaylight.controller",  "sal.connection.implementation").
+                    versionAsInProject(),
 
                 // needed by hosttracker
                 mavenBundle("org.opendaylight.controller", "topologymanager")

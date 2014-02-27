@@ -9,7 +9,8 @@
 
 package org.opendaylight.controller.configuration.internal;
 
-import org.junit.*;
+import org.junit.Assert;
+import org.junit.Test;
 import org.opendaylight.controller.configuration.IConfigurationAware;
 
 public class ConfigurationImplTest {
@@ -18,7 +19,7 @@ public class ConfigurationImplTest {
         @Test
         public void testAddRemoveSaveConfiguration() {
 
-                ConfigurationImpl configurationImpl = new ConfigurationImpl();
+                ConfigurationService configurationImpl = new ConfigurationService();
                 IConfigurationAware testConfigurationAware = new ConfigurationAwareTest();
 
                 configurationImpl.addConfigurationAware(testConfigurationAware);

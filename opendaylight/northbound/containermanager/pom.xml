@@ -4,13 +4,18 @@
   <parent>
     <groupId>org.opendaylight.controller</groupId>
     <artifactId>commons.opendaylight</artifactId>
-    <version>1.4.0-SNAPSHOT</version>
+    <version>1.4.2-SNAPSHOT</version>
     <relativePath>../../commons/opendaylight</relativePath>
   </parent>
+  <scm>
+    <connection>scm:git:ssh://git.opendaylight.org:29418/controller.git</connection>
+    <developerConnection>scm:git:ssh://git.opendaylight.org:29418/controller.git</developerConnection>
+    <url>https://wiki.opendaylight.org/view/OpenDaylight_Controller:Main</url>
+    <tag>HEAD</tag>
+  </scm>
 
-  <groupId>org.opendaylight.controller</groupId>
   <artifactId>containermanager.northbound</artifactId>
-  <version>0.4.0-SNAPSHOT</version>
+  <version>0.4.2-SNAPSHOT</version>
   <packaging>bundle</packaging>
 
   <build>
@@ -18,12 +23,11 @@
       <plugin>
         <groupId>org.codehaus.enunciate</groupId>
         <artifactId>maven-enunciate-plugin</artifactId>
-        <version>${enunciate.version}</version>
        </plugin>
       <plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
-        <version>2.3.6</version>
+        <version>${bundle.plugin.version}</version>
         <extensions>true</extensions>
         <configuration>
           <instructions>
@@ -45,7 +49,9 @@
               javax.xml.bind.annotation,
               javax.xml.bind,
               org.slf4j,
-              org.codehaus.jackson.jaxrs,
+              org.apache.catalina.filters,
+              com.fasterxml.jackson.jaxrs.base,
+              com.fasterxml.jackson.jaxrs.json,
               !org.codehaus.enunciate.jaxrs
             </Import-Package>
             <Web-ContextPath>/controller/nb/v2/containermanager</Web-ContextPath>
@@ -59,37 +65,26 @@
   <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>containermanager</artifactId>
-      <version>0.5.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>appauth</artifactId>
-      <version>0.4.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>web</artifactId>
-      <version>0.4.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>sal</artifactId>
-      <version>0.5.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.codehaus.enunciate</groupId>
       <artifactId>enunciate-core-annotations</artifactId>
-      <version>${enunciate.version}</version>
     </dependency>
     <dependency>
       <groupId>org.opendaylight.controller</groupId>
       <artifactId>commons.northbound</artifactId>
-      <version>0.4.0-SNAPSHOT</version>
-    </dependency>
-        <dependency>
-      <groupId>org.opendaylight.controller.thirdparty</groupId>
-      <artifactId>com.sun.jersey.jersey-servlet</artifactId>
-      <version>1.17-SNAPSHOT</version>
     </dependency>
   </dependencies>
 </project>

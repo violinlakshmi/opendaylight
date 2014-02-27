@@ -8,18 +8,24 @@
 
 package org.opendaylight.controller.networkconfig.neutron;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
+import org.opendaylight.controller.configuration.ConfigurationObject;
+
 @XmlRootElement
 @XmlAccessorType(XmlAccessType.NONE)
 
-public class NeutronRouter {
+public class NeutronRouter extends ConfigurationObject implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     // See OpenStack Network API v2.0 Reference for description of
     // annotated attributes
     @XmlElement (name="id")
@@ -68,15 +74,16 @@ public class NeutronRouter {
     }
 
     public boolean isAdminStateUp() {
-        if (adminStateUp == null)
+        if (adminStateUp == null) {
             return true;
+        }
         return adminStateUp;
     }
 
     public Boolean getAdminStateUp() { return adminStateUp; }
 
     public void setAdminStateUp(Boolean newValue) {
-        this.adminStateUp = newValue;
+        adminStateUp = newValue;
     }
 
     public String getStatus() {
@@ -118,16 +125,21 @@ public class NeutronRouter {
         Iterator<String> i = fields.iterator();
         while (i.hasNext()) {
             String s = i.next();
-            if (s.equals("id"))
+            if (s.equals("id")) {
                 ans.setRouterUUID(this.getRouterUUID());
-            if (s.equals("name"))
+            }
+            if (s.equals("name")) {
                 ans.setName(this.getName());
-            if (s.equals("admin_state_up"))
+            }
+            if (s.equals("admin_state_up")) {
                 ans.setAdminStateUp(this.getAdminStateUp());
-            if (s.equals("status"))
+            }
+            if (s.equals("status")) {
                 ans.setStatus(this.getStatus());
-            if (s.equals("tenant_id"))
+            }
+            if (s.equals("tenant_id")) {
                 ans.setTenantID(this.getTenantID());
+            }
             if (s.equals("external_gateway_info")) {
                 ans.setExternalGatewayInfo(this.getExternalGatewayInfo());
             }

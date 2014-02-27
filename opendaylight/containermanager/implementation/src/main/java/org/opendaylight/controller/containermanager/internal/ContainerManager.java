@@ -9,7 +9,6 @@
 
 package org.opendaylight.controller.containermanager.internal;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -24,21 +23,28 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.osgi.framework.console.CommandInterpreter;
 import org.eclipse.osgi.framework.console.CommandProvider;
+import org.opendaylight.controller.appauth.authorization.Authorization;
 import org.opendaylight.controller.clustering.services.CacheConfigException;
 import org.opendaylight.controller.clustering.services.CacheExistException;
 import org.opendaylight.controller.clustering.services.ICacheUpdateAware;
 import org.opendaylight.controller.clustering.services.IClusterGlobalServices;
 import org.opendaylight.controller.clustering.services.IClusterServices;
+import org.opendaylight.controller.configuration.ConfigurationObject;
 import org.opendaylight.controller.configuration.IConfigurationAware;
 import org.opendaylight.controller.configuration.IConfigurationService;
+import org.opendaylight.controller.containermanager.ContainerChangeEvent;
+import org.opendaylight.controller.containermanager.ContainerConfig;
+import org.opendaylight.controller.containermanager.ContainerData;
+import org.opendaylight.controller.containermanager.ContainerFlowChangeEvent;
+import org.opendaylight.controller.containermanager.ContainerFlowConfig;
 import org.opendaylight.controller.containermanager.IContainerAuthorization;
 import org.opendaylight.controller.containermanager.IContainerManager;
+import org.opendaylight.controller.containermanager.NodeConnectorsChangeEvent;
 import org.opendaylight.controller.sal.authorization.AppRoleLevel;
 import org.opendaylight.controller.sal.authorization.Privilege;
 import org.opendaylight.controller.sal.authorization.Resource;
@@ -47,6 +53,7 @@ import org.opendaylight.controller.sal.authorization.UserLevel;
 import org.opendaylight.controller.sal.core.ContainerFlow;
 import org.opendaylight.controller.sal.core.IContainerAware;
 import org.opendaylight.controller.sal.core.IContainerListener;
+import org.opendaylight.controller.sal.core.IContainerLocalListener;
 import org.opendaylight.controller.sal.core.Node;
 import org.opendaylight.controller.sal.core.NodeConnector;
 import org.opendaylight.controller.sal.core.UpdateType;
@@ -55,8 +62,6 @@ import org.opendaylight.controller.sal.utils.GlobalConstants;
 import org.opendaylight.controller.sal.utils.IObjectReader;
 import org.opendaylight.controller.sal.utils.NodeConnectorCreator;
 import org.opendaylight.controller.sal.utils.NodeCreator;
-import org.opendaylight.controller.sal.utils.ObjectReader;
-import org.opendaylight.controller.sal.utils.ObjectWriter;
 import org.opendaylight.controller.sal.utils.ServiceHelper;
 import org.opendaylight.controller.sal.utils.Status;
 import org.opendaylight.controller.sal.utils.StatusCode;
@@ -64,22 +69,14 @@ import org.opendaylight.controller.topologymanager.ITopologyManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.opendaylight.controller.appauth.authorization.Authorization;
-import org.opendaylight.controller.containermanager.ContainerFlowChangeEvent;
-import org.opendaylight.controller.containermanager.ContainerFlowConfig;
-import org.opendaylight.controller.containermanager.NodeConnectorsChangeEvent;
-import org.opendaylight.controller.containermanager.ContainerChangeEvent;
-import org.opendaylight.controller.containermanager.ContainerConfig;
-import org.opendaylight.controller.containermanager.ContainerData;
-
 public class ContainerManager extends Authorization<String> implements IContainerManager, IObjectReader,
         CommandProvider, ICacheUpdateAware<String, Object>, IContainerInternal, IContainerAuthorization,
         IConfigurationAware {
     private static final Logger logger = LoggerFactory.getLogger(ContainerManager.class);
-    private static String ROOT = GlobalConstants.STARTUPHOME.toString();
-    private static String containersFileName = ROOT + "containers.conf";
+    private static String CONTAINERS_FILE_NAME = "containers.conf";
     private static final String allContainersGroup = "allContainers";
     private IClusterGlobalServices clusterServices;
+    private IConfigurationService configurationService;
     /*
      * Collection containing the configuration objects. This is configuration
      * world: container names (also the map key) are maintained as they were
@@ -93,6 +90,8 @@ public class ContainerManager extends Authorization<String> implements IContaine
     private final Set<IContainerAware> iContainerAware = Collections.synchronizedSet(new HashSet<IContainerAware>());
     private final Set<IContainerListener> iContainerListener = Collections
             .synchronizedSet(new HashSet<IContainerListener>());
+    private final Set<IContainerLocalListener> iContainerLocalListener = Collections
+            .synchronizedSet(new HashSet<IContainerLocalListener>());
 
     void setIContainerListener(IContainerListener s) {
         if (this.iContainerListener != null) {
@@ -128,6 +127,18 @@ public class ContainerManager extends Authorization<String> implements IContaine
         }
     }
 
+    void setIContainerLocalListener(IContainerLocalListener s) {
+        if (this.iContainerLocalListener != null) {
+            this.iContainerLocalListener.add(s);
+        }
+    }
+
+    void unsetIContainerLocalListener(IContainerLocalListener s) {
+        if (this.iContainerLocalListener != null) {
+            this.iContainerLocalListener.remove(s);
+        }
+    }
+
     public void setIContainerAware(IContainerAware iContainerAware) {
         if (!this.iContainerAware.contains(iContainerAware)) {
             this.iContainerAware.add(iContainerAware);
@@ -141,7 +152,7 @@ public class ContainerManager extends Authorization<String> implements IContaine
     public void unsetIContainerAware(IContainerAware iContainerAware) {
         this.iContainerAware.remove(iContainerAware);
         // There is no need to do cleanup of the component when
-        // unregister because it will be taken care by the Containerd
+        // unregister because it will be taken care by the Container
         // component itself
     }
 
@@ -155,6 +166,16 @@ public class ContainerManager extends Authorization<String> implements IContaine
             this.clusterServices = null;
             logger.debug("IClusterServices Unset");
         }
+    }
+
+    public void setConfigurationService(IConfigurationService service) {
+        logger.trace("Got configuration service set request {}", service);
+        this.configurationService = service;
+    }
+
+    public void unsetConfigurationService(IConfigurationService service) {
+        logger.trace("Got configuration service UNset request");
+        this.configurationService = null;
     }
 
     private void allocateCaches() {
@@ -217,9 +238,10 @@ public class ContainerManager extends Authorization<String> implements IContaine
 
         roles = (ConcurrentMap<String, AppRoleLevel>) clusterServices.getCache("containermgr.roles");
 
-        if (containerConfigs.size() > 0) {
+        if (inContainerMode()) {
             for (Map.Entry<String, ContainerConfig> entry : containerConfigs.entrySet()) {
-                notifyContainerChangeInternal(entry.getValue(), UpdateType.ADDED);
+                // Notify global and local listeners about the mode change
+                notifyContainerChangeInternal(entry.getValue(), UpdateType.ADDED, true);
             }
         }
     }
@@ -231,17 +253,26 @@ public class ContainerManager extends Authorization<String> implements IContaine
 
     @Override
     public void entryUpdated(String key, Object value, String cacheName, boolean originLocal) {
+        /*
+         * This is were container manager replays a configuration event that was
+         * notified by its peer from a cluster node where the configuration
+         * happened. Only the global listeners, the cluster unaware classes,
+         * (mainly the shim classes in the sdn protocol plugins) need to receive
+         * these notifications on this cluster node. The cluster aware classes,
+         * like the functional modules which reacts on these events, must _not_
+         * be notified to avoid parallel computation in the cluster.
+         */
         if (!originLocal) {
             if (value instanceof NodeConnectorsChangeEvent) {
                 NodeConnectorsChangeEvent event = (NodeConnectorsChangeEvent) value;
                 List<NodeConnector> ncList = event.getNodeConnectors();
-                notifyContainerEntryChangeInternal(key, ncList, event.getUpdateType());
+                notifyContainerEntryChangeInternal(key, ncList, event.getUpdateType(), false);
             } else if (value instanceof ContainerFlowChangeEvent) {
                 ContainerFlowChangeEvent event = (ContainerFlowChangeEvent) value;
-                notifyCFlowChangeInternal(key, event.getConfigList(), event.getUpdateType());
+                notifyCFlowChangeInternal(key, event.getConfigList(), event.getUpdateType(), false);
             } else if (value instanceof ContainerChangeEvent) {
                 ContainerChangeEvent event = (ContainerChangeEvent) value;
-                notifyContainerChangeInternal(event.getConfig(), event.getUpdateType());
+                notifyContainerChangeInternal(event.getConfig(), event.getUpdateType(), false);
             }
         }
     }
@@ -266,13 +297,14 @@ public class ContainerManager extends Authorization<String> implements IContaine
         createDefaultAuthorizationGroups();
 
         // Read startup configuration and create local database
-        loadConfigurations();
+        loadContainerConfig();
     }
 
     public void destroy() {
         // Clear local states
         this.iContainerAware.clear();
         this.iContainerListener.clear();
+        this.iContainerLocalListener.clear();
     }
 
     /**
@@ -595,9 +627,9 @@ public class ContainerManager extends Authorization<String> implements IContaine
                     String msg = null;
                     ContainerData other = containerData.get(otherContainerName);
                     if (flowSpecList.isEmpty()) {
-                        msg = String.format("Port %s is shared and flow spec is emtpy for this container", port);
+                        msg = String.format("Port %s is shared and flow spec is empty for this container", port);
                     } else if (other.isFlowSpecEmpty()) {
-                        msg = String.format("Port %s is shared and flow spec is emtpy for the other container", port);
+                        msg = String.format("Port %s is shared and flow spec is empty for the other container", port);
                     } else if (!checkCommonContainerFlow(flowSpecList, other.getContainerFlowSpecs()).isSuccess()) {
                         msg = String.format("Port %s is shared and other container has common flow spec", port);
                     }
@@ -703,49 +735,19 @@ public class ContainerManager extends Authorization<String> implements IContaine
         return flowSpecConfig;
     }
 
-    private void loadConfigurations() {
-        /*
-         * Read containers, container flows and finally containers' entries from file
-         * and program the database accordingly
-         */
-        if (containerConfigs.isEmpty()) {
-            loadContainerConfig();
-        }
-    }
-
     private Status saveContainerConfig() {
         return saveContainerConfigLocal();
     }
 
     public Status saveContainerConfigLocal() {
-        ObjectWriter objWriter = new ObjectWriter();
+        Status status = configurationService.persistConfiguration(
+                new ArrayList<ConfigurationObject>(containerConfigs.values()), CONTAINERS_FILE_NAME);
 
-        Status status = objWriter.write(new ConcurrentHashMap<String, ContainerConfig>(containerConfigs), containersFileName);
         if (!status.isSuccess()) {
             return new Status(StatusCode.INTERNALERROR, "Failed to save container configurations: "
                     + status.getDescription());
         }
-        return new Status(StatusCode.SUCCESS);
-    }
-
-    private void removeComponentsStartUpfiles(String containerName) {
-        String startupLocation = String.format("./%s", GlobalConstants.STARTUPHOME.toString());
-        String containerPrint = String.format("_%s.", containerName.toLowerCase(Locale.ENGLISH));
-
-        File directory = new File(startupLocation);
-        String[] fileList = directory.list();
-
-        logger.trace("Deleteing startup configuration files for container {}", containerName);
-        if (fileList != null) {
-            for (String fileName : fileList) {
-                if (fileName.contains(containerPrint)) {
-                    String fullPath = String.format("%s/%s", startupLocation, fileName);
-                    File file = new File(fullPath);
-                    boolean done = file.delete();
-                    logger.trace("{} {}", (done ? "Deleted: " : "Failed to delete: "), fileName);
-                }
-            }
-        }
+        return status;
     }
 
     /**
@@ -800,13 +802,12 @@ public class ContainerManager extends Authorization<String> implements IContaine
      * @param containerName
      * @param delete
      */
-    private void updateResourceGroups(String containerName, boolean delete) {
-        String containerProfile = System.getProperty("container.profile");
-        if (containerProfile == null) containerProfile = "Container";
+    private void updateResourceGroups(ContainerConfig containerConf, boolean delete) {
         // Container Roles and Container Resource Group
-        String groupName = containerProfile+"-" + containerName;
-        String containerAdminRole = containerProfile+"-" + containerName + "-Admin";
-        String containerOperatorRole = containerProfile+"-" + containerName + "-Operator";
+        String containerName = containerConf.getContainer();
+        String groupName = containerConf.getContainerGroupName();
+        String containerAdminRole = containerConf.getContainerAdminRole();
+        String containerOperatorRole = containerConf.getContainerOperatorRole();
         Set<String> allContainerSet = resourceGroups.get(allResourcesGroupName);
         if (delete) {
             resourceGroups.remove(groupName);
@@ -858,27 +859,45 @@ public class ContainerManager extends Authorization<String> implements IContaine
     }
 
     /**
-     * Notify the ContainerListener listeners in case the container mode has changed
-     * following a container configuration operation Note: this call must happen
-     * after the configuration db has been updated
+     * Notify the ContainerListener listeners in case the container mode has
+     * changed following a container configuration operation Note: this call
+     * must happen after the configuration db has been updated
      *
      * @param lastActionDelete
-     *            true if the last container configuration operation was a container
-     *            delete operation
+     *            true if the last container configuration operation was a
+     *            container delete operation
+     * @param notifyLocal
+     *            if true, the notification is also sent to the
+     *            IContainerLocalListener classes besides the IContainerListener
+     *            classes
      */
-    private void notifyContainerModeChange(boolean lastActionDelete) {
+    private void notifyContainerModeChange(boolean lastActionDelete, boolean notifyLocal) {
         if (lastActionDelete == false && containerConfigs.size() == 1) {
-            logger.info("First container Creation. Inform listeners");
+            logger.trace("First container Creation. Inform listeners");
             synchronized (this.iContainerListener) {
                 for (IContainerListener i : this.iContainerListener) {
                     i.containerModeUpdated(UpdateType.ADDED);
                 }
             }
+            if (notifyLocal) {
+                synchronized (this.iContainerLocalListener) {
+                    for (IContainerLocalListener i : this.iContainerLocalListener) {
+                        i.containerModeUpdated(UpdateType.ADDED);
+                    }
+                }
+            }
         } else if (lastActionDelete == true && containerConfigs.isEmpty()) {
-            logger.info("Last container Deletion. Inform listeners");
+            logger.trace("Last container Deletion. Inform listeners");
             synchronized (this.iContainerListener) {
                 for (IContainerListener i : this.iContainerListener) {
                     i.containerModeUpdated(UpdateType.REMOVED);
+                }
+            }
+            if (notifyLocal) {
+                synchronized (this.iContainerLocalListener) {
+                    for (IContainerLocalListener i : this.iContainerLocalListener) {
+                        i.containerModeUpdated(UpdateType.REMOVED);
+                    }
                 }
             }
         }
@@ -886,7 +905,7 @@ public class ContainerManager extends Authorization<String> implements IContaine
 
     private Status addRemoveContainerEntries(String containerName, List<String> nodeConnectorsString, boolean delete) {
         // Construct action message
-        String action = String.format("Node conenctor(s) %s container %s: %s", delete ? "removal from" : "addition to",
+        String action = String.format("Node connector(s) %s container %s: %s", delete ? "removal from" : "addition to",
                 containerName, nodeConnectorsString);
 
         // Validity Check
@@ -954,28 +973,28 @@ public class ContainerManager extends Authorization<String> implements IContaine
         // Update cluster Configuration cache
         containerConfigs.put(containerName, entryConf);
 
-        // Notify
+        // Notify global and local listeners
         UpdateType update = (delete) ? UpdateType.REMOVED : UpdateType.ADDED;
-        notifyContainerEntryChangeInternal(containerName, nodeConnectors, update);
+        notifyContainerEntryChangeInternal(containerName, nodeConnectors, update, true);
         // Trigger cluster notification
         containerChangeEvents.put(containerName, new NodeConnectorsChangeEvent(nodeConnectors, update));
 
         return status;
     }
 
-    private void notifyContainerChangeInternal(ContainerConfig conf, UpdateType update) {
+    private void notifyContainerChangeInternal(ContainerConfig conf, UpdateType update, boolean notifyLocal) {
         String containerName = conf.getContainerName();
         logger.trace("Notifying listeners on {} for container {}", update, containerName);
         // Back-end World: container name forced to lower case
         String container = containerName.toLowerCase(Locale.ENGLISH);
         boolean delete = (update == UpdateType.REMOVED);
         // Check if a container mode change notification is needed
-        notifyContainerModeChange(delete);
+        notifyContainerModeChange(delete, notifyLocal);
         // Notify listeners
         notifyContainerAwareListeners(container, delete);
     }
 
-    private void notifyContainerEntryChangeInternal(String containerName, List<NodeConnector> ncList, UpdateType update) {
+    private void notifyContainerEntryChangeInternal(String containerName, List<NodeConnector> ncList, UpdateType update, boolean notifyLocal) {
         logger.trace("Notifying listeners on {} for ports {} in container {}", update, ncList, containerName);
         // Back-end World: container name forced to lower case
         String container = containerName.toLowerCase(Locale.ENGLISH);
@@ -986,19 +1005,37 @@ public class ContainerManager extends Authorization<String> implements IContaine
                     i.nodeConnectorUpdated(container, nodeConnector, update);
                 }
             }
+            // Check if the Functional Modules need to be notified as well
+            if (notifyLocal) {
+                synchronized (this.iContainerLocalListener) {
+                    for (IContainerLocalListener i : this.iContainerLocalListener) {
+                        i.nodeConnectorUpdated(container, nodeConnector, update);
+                    }
+                }
+            }
         }
     }
 
-    private void notifyCFlowChangeInternal(String containerName, List<ContainerFlowConfig> confList, UpdateType update) {
+    private void notifyCFlowChangeInternal(String containerName, List<ContainerFlowConfig> confList, UpdateType update,
+            boolean notifyLocal) {
         logger.trace("Notifying listeners on {} for flow specs {} in container {}", update, confList, containerName);
         // Back-end World: container name forced to lower case
         String container = containerName.toLowerCase(Locale.ENGLISH);
-        synchronized (this.iContainerListener) {
-            for (ContainerFlowConfig conf : confList) {
-                for (Match match : conf.getMatches()) {
-                    ContainerFlow cFlow = new ContainerFlow(match);
+
+        for (ContainerFlowConfig conf : confList) {
+            for (Match match : conf.getMatches()) {
+                ContainerFlow cFlow = new ContainerFlow(match);
+                synchronized (this.iContainerListener) {
                     for (IContainerListener i : this.iContainerListener) {
                         i.containerFlowUpdated(container, cFlow, cFlow, update);
+                    }
+                }
+                // Check if the Functional Modules need to be notified as well
+                if (notifyLocal) {
+                    synchronized (this.iContainerLocalListener) {
+                        for (IContainerLocalListener i : this.iContainerLocalListener) {
+                            i.containerFlowUpdated(container, cFlow, cFlow, update);
+                        }
                     }
                 }
             }
@@ -1067,9 +1104,9 @@ public class ContainerManager extends Authorization<String> implements IContaine
         // Update cluster cache
         this.containerConfigs.put(containerName, containerConfig);
 
-        // Notify listeners
+        // Notify global and local listeners
         UpdateType update = (delete) ? UpdateType.REMOVED : UpdateType.ADDED;
-        notifyCFlowChangeInternal(containerName, cFlowConfList, update);
+        notifyCFlowChangeInternal(containerName, cFlowConfList, update, true);
         // Trigger cluster notification
         containerChangeEvents.put(containerName, new ContainerFlowChangeEvent(cFlowConfList, update));
 
@@ -1131,19 +1168,6 @@ public class ContainerManager extends Authorization<String> implements IContaine
         }
 
         /*
-         * This is a quick fix until configuration service becomes the
-         * centralized configuration management place. Here container manager will
-         * remove the startup files for all the bundles that are present in the
-         * container being deleted. Do the cleanup here in Container manger as do not
-         * want to put this temporary code in Configuration manager yet which is
-         * ODL.
-         */
-        if (delete) {
-            // TODO: remove when Config Mgr takes over
-            removeComponentsStartUpfiles(containerName);
-        }
-
-        /*
          * Update Configuration: This will trigger the notifications on cache
          * update callback locally and on the other cluster nodes
          */
@@ -1154,11 +1178,11 @@ public class ContainerManager extends Authorization<String> implements IContaine
         }
 
         // Automatically create and populate user and resource groups
-        updateResourceGroups(containerName, delete);
+        updateResourceGroups(containerConf, delete);
 
-        // Notify listeners
+        // Notify global and local listeners
         UpdateType update = (delete) ? UpdateType.REMOVED : UpdateType.ADDED;
-        notifyContainerChangeInternal(containerConf, update);
+        notifyContainerChangeInternal(containerConf, update, true);
 
         // Trigger cluster notification
         containerChangeEvents.put(containerName, new ContainerChangeEvent(containerConf, update));
@@ -1166,8 +1190,8 @@ public class ContainerManager extends Authorization<String> implements IContaine
         if (update == UpdateType.ADDED) {
             if (containerConf.hasFlowSpecs()) {
                 List<ContainerFlowConfig> specList = containerConf.getContainerFlowConfigs();
-                // Notify flow spec addition
-                notifyCFlowChangeInternal(containerName, specList, update);
+                // Notify global and local listeners about flow spec addition
+                notifyCFlowChangeInternal(containerName, specList, update, true);
 
                 // Trigger cluster notification
                 containerChangeEvents.put(containerName, new ContainerFlowChangeEvent(specList, update));
@@ -1175,14 +1199,16 @@ public class ContainerManager extends Authorization<String> implements IContaine
 
             if (containerConf.hasNodeConnectors()) {
                 List<NodeConnector> ncList = containerConf.getPortList();
-                // Notify port(s) addition
-                notifyContainerEntryChangeInternal(containerName, ncList, update);
+                // Notify global and local listeners about port(s) addition
+                notifyContainerEntryChangeInternal(containerName, ncList, update, true);
                 // Trigger cluster notification
                 containerChangeEvents.put(containerName, new NodeConnectorsChangeEvent(ncList, update));
             }
         }
 
-        if (delete) clusterServices.removeContainerCaches(containerName);
+        if (delete) {
+            clusterServices.removeContainerCaches(containerName);
+        }
         return status;
     }
 
@@ -1273,18 +1299,9 @@ public class ContainerManager extends Authorization<String> implements IContaine
         return ois.readObject();
     }
 
-    @SuppressWarnings("unchecked")
     private void loadContainerConfig() {
-        ObjectReader objReader = new ObjectReader();
-        ConcurrentMap<String, ContainerConfig> configMap = (ConcurrentMap<String, ContainerConfig>) objReader.read(this,
-                containersFileName);
-
-        if (configMap == null) {
-            return;
-        }
-
-        for (Map.Entry<String, ContainerConfig> configEntry : configMap.entrySet()) {
-            addContainer(configEntry.getValue());
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, CONTAINERS_FILE_NAME)) {
+            addContainer((ContainerConfig) conf);
         }
     }
 
@@ -1336,10 +1353,6 @@ public class ContainerManager extends Authorization<String> implements IContaine
             return;
         }
         String staticVlan = ci.nextArgument();
-        if (staticVlan == null) {
-            ci.print("Static Vlan not specified");
-            return;
-        }
         ContainerConfig containerConfig = new ContainerConfig(containerName, staticVlan, null, null);
         ci.println(this.addRemoveContainer(containerConfig, false));
     }
@@ -1600,5 +1613,10 @@ public class ContainerManager extends Authorization<String> implements IContaine
     @Override
     public boolean hasNonDefaultContainer() {
         return !containerConfigs.keySet().isEmpty();
+    }
+
+    @Override
+    public boolean inContainerMode() {
+        return this.containerConfigs.size() > 0;
     }
 }

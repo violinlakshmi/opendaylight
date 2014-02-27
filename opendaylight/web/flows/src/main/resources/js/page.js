@@ -49,6 +49,7 @@ one.f.address = {
         flows : "/node-flows",
         nodes : "/node-ports",
         flow : "/flow",
+        modifyFlow : "/modifyFlow",
         deleteFlows:"/flow/deleteFlows"
     }
 }
@@ -171,7 +172,7 @@ one.f.detail = {
             var body = [];
             var tr = {};
             var entry = [];
-                        entry.push(data['flow']['ingressPort']);
+            entry.push(data['flow']['ingressPort']);
             entry.push(data['flow']['etherType']);
             entry.push(data['flow']['vlanId']);
             entry.push(data['flow']['vlanPriority']);
@@ -193,10 +194,26 @@ one.f.detail = {
             var body = [];
             var tr = {};
             var entry = [];
-
             var actions = '';
+
             $(data['flow']['actions']).each(function(index, value) {
-                actions += value + ', ';
+                var locEqualTo = value.indexOf("=");
+                if ( locEqualTo == -1 ) {
+                    actions += value + ', ';
+                } else {
+                    var action = value.substr(0,locEqualTo);
+                    if( action == "OUTPUT") {
+                        var portIds = value.substr(locEqualTo+1).split(",");
+                        actions += action + "=";
+                        var allPorts = one.f.flows.registry.nodeports[one.f.flows.registry.selectedNode]['ports'];
+                        for(var i =0; i < portIds.length ; i++) {
+                            var portName = allPorts[portIds[i]];
+                            actions += portName + ", ";
+                        }
+                    } else {
+                        actions += value + ', ';
+                    }
+                }
             });
             actions = actions.slice(0,-2);
             entry.push(actions);
@@ -221,7 +238,7 @@ one.f.detail = {
             return $table;
         },
         description : function(body) {
-            var header = ['Input Port', 'Ethernet Type', 'VLAN ID', 'VLAN Priority', 'Source MAC', 'Dest MAC', 'Source IP', 'Dest IP', 'TOS', 'Source Port', 'Dest Port', 'Protocol', 'Cookie'];
+            var header = ['Input Port', 'Ethernet Type', 'VLAN ID', 'VLAN Priority', 'Source MAC', 'Dest MAC', 'Source IP', 'Dest IP', 'ToS', 'Source Port', 'Dest Port', 'Protocol', 'Cookie'];
             var $thead = one.lib.dashlet.table.header(header);
             var attributes = ['table-striped', 'table-bordered', 'table-condensed'];
             var $table = one.lib.dashlet.table.table(attributes);
@@ -255,11 +272,13 @@ one.f.flows = {
             removeMultiple : "one_f_flows_id_dashlet_removeMultiple",
             remove : "one_f_flows_id_dashlet_remove",
             toggle : "one_f_flows_id_dashlet_toggle",
+            edit : "one_f_flows_id_dashlet_edit",
             datagrid : "one_f_flows_id_dashlet_datagrid",
             selectAllFlows : "one_f_flows_id_dashlet_selectAllFlows"
         },
         modal : {
             install : "one_f_flows_id_modal_install",
+            edit : "one_f_flows_id_modal_edit",
             add : "one_f_flows_id_modal_add",
             close : "one_f_flows_id_modal_close",
             modal : "one_f_flows_id_modal_modal",
@@ -418,6 +437,8 @@ one.f.flows = {
 
         // details
         var flows = one.f.flows.registry.flows;
+        one.f.flows.registry['selectedId'] = id;
+        one.f.flows.registry['selectedNode'] = node;
         var flow;
         $(flows).each(function(index, value) {
           if (value.name == id && value.nodeId == node) {
@@ -431,6 +452,17 @@ one.f.flows = {
             $button.click(function() {
                 var $modal = one.f.flows.modal.dialog.initialize(id, node);
                 $modal.modal();
+            });
+            // edit button
+            var editButton = one.lib.dashlet.button.single("Edit Flow", one.f.flows.id.dashlet.edit, "btn-primary", "btn-mini");
+            var $editButton = one.lib.dashlet.button.button(editButton);
+            $editButton.click(function() {
+            	var install = flow['flow']['installInHw'];
+                var $modal = one.f.flows.modal.initialize(true,install);
+                $modal.modal().on('shown',function(){
+                    var $port = $('#'+one.f.flows.id.modal.form.port);
+                    $('#'+one.f.flows.id.modal.form.nodes).trigger("change");
+                });
             });
             // toggle button
             var toggle;
@@ -461,7 +493,7 @@ one.f.flows = {
                 });
             });
 
-            $detailDashlet.append($button).append($toggle);
+            $detailDashlet.append($button).append($editButton).append($toggle);
         }
         // append details
         var body = one.f.detail.data.dashlet(flow);
@@ -519,9 +551,17 @@ one.f.flows = {
                 return $p;
             }
         },
-        initialize : function() {
-            var h3 = "Add Flow Entry";
-            var footer = one.f.flows.modal.footer();
+        initialize : function(edit,install) {
+            var h3;
+            if(edit) {
+                h3 = "Edit Flow Entry";
+                var footer = one.f.flows.modal.footerEdit();
+
+            } else {
+                h3 = "Add Flow Entry";
+                var footer = one.f.flows.modal.footer();
+            }
+
             var $modal = one.lib.modal.spawn(one.f.flows.id.modal.modal, h3, "", footer);
 
             // bind close button
@@ -529,25 +569,32 @@ one.f.flows = {
                 $modal.modal('hide');
             });
 
-            // bind add flow button
-            $('#'+one.f.flows.id.modal.add, $modal).click(function() {
-                one.f.flows.modal.add($modal, 'false');
-            });
+            if (edit) {
+                // bind edit flow button
+                $('#'+one.f.flows.id.modal.edit, $modal).click(function() {
+                    one.f.flows.modal.save($modal, install, true);
+                });
+            } else {
+                // bind add flow button
+                $('#'+one.f.flows.id.modal.add, $modal).click(function() {
+                    one.f.flows.modal.save($modal, 'false');
+                });
 
-            // bind install flow button
-            $('#'+one.f.flows.id.modal.install, $modal).click(function() {
-                one.f.flows.modal.add($modal, 'true');
-            });
+                // bind install flow button
+                $('#'+one.f.flows.id.modal.install, $modal).click(function() {
+                    one.f.flows.modal.save($modal, 'true');
+                });
+            }
 
-            // inject body (nodePorts)
-            one.f.flows.modal.ajax.nodes(function(nodes, nodeports) {
-                var $body = one.f.flows.modal.body(nodes, nodeports);
-                one.lib.modal.inject.body($modal, $body);
-            });
+
+            var nodes = one.f.flows.registry.nodes;
+            var nodeports = one.f.flows.registry.nodeports;
+            var $body = one.f.flows.modal.body(nodes, nodeports, edit);
+            one.lib.modal.inject.body($modal, $body,edit);
 
             return $modal;
         },
-        add : function($modal, install) {
+        save : function($modal, install, edit) {
             var result = {};
 
             result['name'] = $('#'+one.f.flows.id.modal.form.name, $modal).val();
@@ -567,7 +614,6 @@ one.f.flows = {
             result['tpSrc'] = $('#'+one.f.flows.id.modal.form.srcPort, $modal).val();
             result['tpDst'] = $('#'+one.f.flows.id.modal.form.dstPort, $modal).val();
             result['protocol'] = $('#'+one.f.flows.id.modal.form.protocol, $modal).val();
-
             result['installInHw'] = install;
 
             var nodeId = $('#'+one.f.flows.id.modal.form.nodes, $modal).val();
@@ -602,25 +648,46 @@ one.f.flows = {
             // package for ajax call
             var resource = {};
             resource['body'] = JSON.stringify(result);
-            resource['action'] = 'add';
+            if(edit){
+                resource['action'] = 'edit';
+            } else {
+                resource['action'] = 'add';
+            }
+
             resource['nodeId'] = nodeId;
 
-            one.f.flows.modal.ajax.saveflow(resource, function(data) {
-                if (data == "Success") {
-                    $modal.modal('hide');
-                    one.lib.alert('Flow Entry added');
-                    one.main.dashlet.left.top.empty();
-                    one.f.flows.dashlet(one.main.dashlet.left.top);
-                } else {
-                    alert('Could not add flow: '+data);
-                }
-            });
+            if (edit) {
+                    one.f.flows.modal.ajax.saveflow(resource, function(data) {
+                    if (data == "Success") {
+                        $modal.modal('hide').on('hidden', function () {
+                            one.f.flows.detail(result['name'], nodeId);
+                        });
+                        one.lib.alert('Flow Entry edited');
+                        one.main.dashlet.left.top.empty();
+                        one.f.flows.dashlet(one.main.dashlet.left.top);
+                    } else {
+                        alert('Could not edit flow: '+data);
+                    }
+                });
+            } else {
+                    one.f.flows.modal.ajax.saveflow(resource, function(data) {
+                    if (data == "Success") {
+                        $modal.modal('hide');
+                        one.lib.alert('Flow Entry added');
+                        one.main.dashlet.left.top.empty();
+                        one.f.flows.dashlet(one.main.dashlet.left.top);
+                    } else {
+                        alert('Could not add flow: '+data);
+                    }
+                });
+            }
         },
         ajax : {
             nodes : function(successCallback) {
                 $.getJSON(one.f.address.root+one.f.address.flows.nodes, function(data) {
                     var nodes = one.f.flows.modal.data.nodes(data);
                     var nodeports = data;
+                    one.f.flows.registry['nodes'] = nodes;
                     one.f.flows.registry['nodeports'] = nodeports;
 
                     successCallback(nodes, nodeports);
@@ -655,16 +722,29 @@ one.f.flows = {
                 return result;
             }
         },
-        body : function(nodes, nodeports) {
+        body : function(nodes, nodeports, edit) {
             var $form = $(document.createElement('form'));
             var $fieldset = $(document.createElement('fieldset'));
+            var existingFlow;
             // flow description
-            var $legend = one.lib.form.legend("Flow Description");
+            var $legend = one.lib.form.legend("");
+            $legend.css('visibility', 'hidden');
             $fieldset.append($legend);
             // name
             var $label = one.lib.form.label("Name");
             var $input = one.lib.form.input("Flow Name");
             $input.attr('id', one.f.flows.id.modal.form.name);
+            if(edit) {
+                $input.attr('disabled', 'disabled');
+                var flows = one.f.flows.registry.flows;
+                $(flows).each(function(index, value) {
+                  if (value.name == one.f.flows.registry.selectedId && value.nodeId == one.f.flows.registry.selectedNode) {
+                    existingFlow = value.flow;
+                  }
+                });
+                $input.val(existingFlow.name);
+            }
+
             $fieldset.append($label).append($input);
             // node
             var $label = one.lib.form.label("Node");
@@ -672,6 +752,10 @@ one.f.flows = {
             one.lib.form.select.prepend($select, { '' : 'Please Select a Node' });
             $select.val($select.find("option:first").val());
             $select.attr('id', one.f.flows.id.modal.form.nodes);
+            if(edit) {
+                $select.attr('disabled', 'disabled');
+                $select.val(existingFlow.node.type + "|"+ existingFlow.node.nodeIDString);
+            }
 
             // bind onchange
             $select.change(function() {
@@ -687,12 +771,16 @@ one.f.flows = {
                 one.lib.form.select.inject($ports, ports);
                 one.lib.form.select.prepend($ports, { '' : 'Please Select a Port' });
                 $ports.val($ports.find("option:first").val());
+                if(edit) {
+                    $ports.val( existingFlow.ingressPort );
+                }
             });
 
             $fieldset.append($label).append($select);
             // input port
             var $label = one.lib.form.label("Input Port");
             var $select = one.lib.form.select.create();
+
             $select.attr('id', one.f.flows.id.modal.form.port);
             $fieldset.append($label).append($select);
             // priority
@@ -701,21 +789,35 @@ one.f.flows = {
             $input.attr('id', one.f.flows.id.modal.form.priority);
             $input.val('500');
             $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.priority);
+            }
             // hardTimeout
             var $label = one.lib.form.label("Hard Timeout");
             var $input = one.lib.form.input("Hard Timeout");
             $input.attr('id', one.f.flows.id.modal.form.hardTimeout);
+            if(edit) {
+                $input.val(existingFlow.hardTimeout);
+            }
             $fieldset.append($label).append($input);
+
             // idleTimeout
             var $label = one.lib.form.label("Idle Timeout");
             var $input = one.lib.form.input("Idle Timeout");
             $input.attr('id', one.f.flows.id.modal.form.idleTimeout);
             $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.idleTimeout);
+            }
             // cookie
             var $label = one.lib.form.label("Cookie");
             var $input = one.lib.form.input("Cookie");
             $input.attr('id', one.f.flows.id.modal.form.cookie);
             $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.cookie);
+            }
+
             // layer 2
             var $legend = one.lib.form.legend("Layer 2");
             $fieldset.append($legend);
@@ -725,51 +827,75 @@ one.f.flows = {
             $input.attr('id', one.f.flows.id.modal.form.etherType);
             $input.val('0x800');
             $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.etherType);
+            }
             // vlanId
             var $label = one.lib.form.label("VLAN Identification Number");
             var $input = one.lib.form.input("VLAN Identification Number");
             $input.attr('id', one.f.flows.id.modal.form.vlanId);
             var $help = one.lib.form.help("Range: 0 - 4095");
             $fieldset.append($label).append($input).append($help);
+            if(edit) {
+                $input.val(existingFlow.vlanId);
+            }
+
             // vlanPriority
             var $label = one.lib.form.label("VLAN Priority");
             var $input = one.lib.form.input("VLAN Priority");
             $input.attr('id', one.f.flows.id.modal.form.vlanPriority);
             var $help = one.lib.form.help("Range: 0 - 7");
             $fieldset.append($label).append($input).append($help);
+            if(edit) {
+                $input.val(existingFlow.vlanPriority);
+            }
+
             // srcMac
             var $label = one.lib.form.label("Source MAC Address");
-            var $input = one.lib.form.input("Source MAC Address");
+            var $input = one.lib.form.input("3c:97:0e:75:c3:f7");
             $input.attr('id', one.f.flows.id.modal.form.srcMac);
-            var $help = one.lib.form.help("Example: 00:11:22:aa:bb:cc");
-            $fieldset.append($label).append($input).append($help);
+            $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.srcMac);
+            }
             // dstMac
             var $label = one.lib.form.label("Destination MAC Address");
-            var $input = one.lib.form.input("Destination MAC Address");
+            var $input = one.lib.form.input("7c:d1:c3:e8:e6:99");
             $input.attr('id', one.f.flows.id.modal.form.dstMac);
-            var $help = one.lib.form.help("Example: 00:11:22:aa:bb:cc");
-            $fieldset.append($label).append($input).append($help);
+            $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.dstMac);
+            }
             // layer 3
             var $legend = one.lib.form.legend("Layer 3");
             $fieldset.append($legend);
+
             // srcIp
             var $label = one.lib.form.label("Source IP Address");
-            var $input = one.lib.form.input("Source IP Address");
+            var $input = one.lib.form.input("192.168.3.128");
             $input.attr('id', one.f.flows.id.modal.form.srcIp);
-            var $help = one.lib.form.help("Example: 127.0.0.1");
-            $fieldset.append($label).append($input).append($help);
+            $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.srcIp);
+            }
             // dstIp
             var $label = one.lib.form.label("Destination IP Address");
-            var $input = one.lib.form.input("Destination IP Address");
+            var $input = one.lib.form.input("2001:2334::0/32");
             $input.attr('id', one.f.flows.id.modal.form.dstIp);
-            var $help = one.lib.form.help("Example: 127.0.0.1");
-            $fieldset.append($label).append($input).append($help);
+            $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.dstIp);
+            }
             // tosBits
-            var $label = one.lib.form.label("TOS Bits");
-            var $input = one.lib.form.input("TOS Bits");
+            var $label = one.lib.form.label("ToS Bits");
+            var $input = one.lib.form.input("ToS Bits");
             $input.attr('id', one.f.flows.id.modal.form.tosBits);
             var $help = one.lib.form.help("Range: 0 - 63");
             $fieldset.append($label).append($input).append($help);
+            if(edit) {
+                $input.val(existingFlow.tosBits);
+            }
+
             // layer 4
             var $legend = one.lib.form.legend("Layer 4");
             $fieldset.append($legend);
@@ -779,17 +905,26 @@ one.f.flows = {
             $input.attr('id', one.f.flows.id.modal.form.srcPort);
             var $help = one.lib.form.help("Range: 0 - 65535");
             $fieldset.append($label).append($input).append($help);
+            if(edit) {
+                $input.val(existingFlow.srcPort);
+            }
             // dstPort
             var $label = one.lib.form.label("Destination Port");
             var $input = one.lib.form.input("Destination Port");
             $input.attr('id', one.f.flows.id.modal.form.dstPort);
             var $help = one.lib.form.help("Range: 0 - 65535");
             $fieldset.append($label).append($input).append($help);
+            if(edit) {
+                $input.val(existingFlow.dstPort);
+            }
             // protocol
             var $label = one.lib.form.label("Protocol");
             var $input = one.lib.form.input("Protocol");
             $input.attr('id', one.f.flows.id.modal.form.protocol);
             $fieldset.append($label).append($input);
+            if(edit) {
+                $input.val(existingFlow.protocol);
+            }
             // actions
             var $legend = one.lib.form.label("Actions");
             $fieldset.append($legend);
@@ -797,30 +932,30 @@ one.f.flows = {
             var tableAttributes = ["table-striped", "table-bordered", "table-condensed", "table-hover", "table-cursor"];
             var $table = one.lib.dashlet.table.table(tableAttributes);
             $table.attr('id', one.f.flows.id.modal.action.table);
-            var tableHeaders = ["Action", "Data", "Type"];
+            var tableHeaders = ["Action", "Data"];
             var $thead = one.lib.dashlet.table.header(tableHeaders);
             var $tbody = one.lib.dashlet.table.body("", tableHeaders);
             $table.append($thead).append($tbody);
             // actions
             var actions = {
                 "" : "Please Select an Action",
-                "drop" : "Drop",
-                "loopback" : "Loopback",
-                "flood" : "Flood",
-                "softwarePath" : "Software Path",
-                "hardwarePath" : "Hardware Path",
-                "controller" : "Controller",
-                "addOutputPorts" : "Add Output Ports",
-                "setVlanId" : "Set VLAN ID",
-                "setVlanPriority" : "Set VLAN Priority",
-                "stripVlanHeader" : "Strip VLAN Header",
-                "modifyDatalayerSourceAddress" : "Modify Datalayer Source Address",
-                "modifyDatalayerDestinationAddress" : "Modify Datalayer Destination Address",
-                "modifyNetworkSourceAddress" : "Modify Network Source Address",
-                "modifyNetworkDestinationAddress" :"Modify Network Destination Address",
-                "modifyTosBits" : "Modify TOS Bits",
-                "modifyTransportSourcePort" : "Modify Transport Source Port",
-                "modifyTransportDestinationPort" : "Modify Transport Destination Port"
+                "DROP" : "Drop",
+                "LOOPBACK" : "Loopback",
+                "FLOOD" : "Flood",
+                "SW_PATH" : "Software Path",
+                "HW_PATH" : "Hardware Path",
+                "CONTROLLER" : "Controller",
+                "OUTPUT" : "Add Output Ports",
+                "SET_VLAN_ID" : "Set VLAN ID",
+                "SET_VLAN_PCP" : "Set VLAN Priority",
+                "POP_VLAN" : "Strip VLAN Header",
+                "SET_DL_SRC" : "Modify Datalayer Source Address",
+                "SET_DL_DST" : "Modify Datalayer Destination Address",
+                "SET_NW_SRC" : "Modify Network Source Address",
+                "SET_NW_DST" :"Modify Network Destination Address",
+                "SET_NW_TOS" : "Modify ToS Bits",
+                "SET_TP_SRC" : "Modify Transport Source Port",
+                "SET_TP_DST" : "Modify Transport Destination Port"
             };
             var $select = one.lib.form.select.create(actions);
             // when selecting an action
@@ -830,6 +965,31 @@ one.f.flows = {
                 $select[0].selectedIndex = 0;
             });
 
+            if(edit) {
+                $(existingFlow.actions).each(function(index, value){
+                    setTimeout(function(){
+                        var locEqualTo = value.indexOf("=");
+                        if ( locEqualTo == -1 ) {
+                            one.f.flows.modal.action.add.add(actions[value], value);
+                        } else {
+                            var action = value.substr(0,locEqualTo);
+                            if( action == "OUTPUT") {
+                                var portIds = value.substr(locEqualTo+1).split(",");
+                                var ports = [];
+                                var allPorts = one.f.flows.registry.nodeports[one.f.flows.registry.currentNode]['ports'];
+                                for(var i =0; i < portIds.length ; i++) {
+                                    var portName = allPorts[portIds[i]];
+                                    ports.push(portName);
+                                }
+                                one.f.flows.modal.action.add.addPortsToTable(ports.join(", "), portIds.join(","));
+                            } else {
+                                var val = value.substr(locEqualTo+1);
+                                one.f.flows.modal.action.add.addDataToTable(actions[action], val, action)
+                            }
+                        }
+                    }, 1000)
+                });
+            }
             $fieldset.append($select).append($table);
 
             // return
@@ -839,12 +999,12 @@ one.f.flows = {
         action : {
             parse : function(option) {
                 switch (option) {
-                    case "addOutputPorts" :
+                    case "OUTPUT" :
                         var h3 = "Add Output Port";
                         var $modal = one.f.flows.modal.action.initialize(h3, one.f.flows.modal.action.body.addOutputPorts, one.f.flows.modal.action.add.addOutputPorts);
                         $modal.modal();
                         break;
-                    case "setVlanId" :
+                    case "SET_VLAN_ID" :
                         var h3 = "Set VLAN ID";
                         var placeholder = "VLAN Identification Number";
                         var id = one.f.flows.id.modal.action.setVlanId;
@@ -860,7 +1020,7 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "setVlanPriority" :
+                    case "SET_VLAN_PCP" :
                         var h3 = "Set VLAN Priority";
                         var placeholder = "VLAN Priority";
                         var id = one.f.flows.id.modal.action.setVlanPriority;
@@ -876,12 +1036,12 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "stripVlanHeader" :
+                    case "POP_VLAN" :
                         var name = "Strip VLAN Header";
                         var action = 'POP_VLAN';
                         one.f.flows.modal.action.add.add(name, action);
                         break;
-                    case "modifyDatalayerSourceAddress" :
+                    case "SET_DL_SRC" :
                         var h3 = "Set Source MAC Address";
                         var placeholder = "Source MAC Address";
                         var id = one.f.flows.id.modal.action.modifyDatalayerSourceAddress;
@@ -897,7 +1057,7 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "modifyDatalayerDestinationAddress" :
+                    case "SET_DL_DST" :
                         var h3 = "Set Destination MAC Address";
                         var placeholder = "Destination MAC Address";
                         var id = one.f.flows.id.modal.action.modifyDatalayerDestinationAddress;
@@ -913,7 +1073,7 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "modifyNetworkSourceAddress" :
+                    case "SET_NW_SRC" :
                         var h3 = "Set IP Source Address";
                         var placeholder = "Source IP Address";
                         var id = one.f.flows.id.modal.action.modifyNetworkSourceAddress;
@@ -929,7 +1089,7 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "modifyNetworkDestinationAddress" :
+                    case "SET_NW_DST" :
                         var h3 = "Set IP Destination Address";
                         var placeholder = "Destination IP Address";
                         var id = one.f.flows.id.modal.action.modifyNetworkDestinationAddress;
@@ -945,13 +1105,13 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "modifyTosBits" :
+                    case "SET_NW_TOS" :
                         var h3 = "Set IPv4 ToS";
                         var placeholder = "IPv4 ToS";
                         var id = one.f.flows.id.modal.action.modifyTosBits;
                         var help = "Range: 0 - 63";
                         var action = 'SET_NW_TOS';
-                        var name = "TOS Bits";
+                        var name = "ToS Bits";
                         var body = function() {
                             return one.f.flows.modal.action.body.set(h3, placeholder, id, help);
                         };
@@ -961,7 +1121,7 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "modifyTransportSourcePort" :
+                    case "SET_TP_SRC" :
                         var h3 = "Set Transport Source Port";
                         var placeholder = "Transport Source Port";
                         var id = one.f.flows.id.modal.action.modifyTransportSourcePort;
@@ -977,7 +1137,7 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "modifyTransportDestinationPort" :
+                    case "SET_TP_DST" :
                         var h3 = "Set Transport Destination Port";
                         var placeholder = "Transport Destination Port";
                         var id = one.f.flows.id.modal.action.modifyTransportDestinationPort;
@@ -993,32 +1153,32 @@ one.f.flows = {
                         var $modal = one.f.flows.modal.action.initialize(h3, body, add);
                         $modal.modal();
                         break;
-                    case "drop" :
+                    case "DROP" :
                         var name = "Drop";
                         var action = 'DROP';
                         one.f.flows.modal.action.add.add(name, action);
                         break;
-                    case "loopback" :
+                    case "LOOPBACK" :
                         var name = "Loopback";
                         var action = 'LOOPBACK';
                         one.f.flows.modal.action.add.add(name, action);
                         break;
-                    case "flood" :
+                    case "FLOOD" :
                         var name = "Flood";
                         var action = 'FLOOD';
                         one.f.flows.modal.action.add.add(name, action);
                         break;
-                    case "softwarePath" :
+                    case "SW_PATH" :
                         var name = "Software Path";
                         var action = 'SW_PATH';
                         one.f.flows.modal.action.add.add(name, action);
                         break;
-                    case "hardwarePath" :
+                    case "HW_PATH" :
                         var name = "Hardware Path";
                         var action = 'HW_PATH';
                         one.f.flows.modal.action.add.add(name, action);
                         break;
-                    case "controller" :
+                    case "CONTROLLER" :
                         var name = "Controller";
                         var action = 'CONTROLLER';
                         one.f.flows.modal.action.add.add(name, action);
@@ -1050,14 +1210,17 @@ one.f.flows = {
                     });
                     ports = ports.slice(0,-2);
                     pid = pid.slice(0,-1);
+                    one.f.flows.modal.action.add.addPortsToTable(ports, pid);
+                    $modal.modal('hide');
+                },
+                addPortsToTable : function(ports, pid){
                     var $tr = one.f.flows.modal.action.table.add("Add Output Ports", ports);
-                    $tr.attr('id', 'addOutputPorts');
+                    $tr.attr('id', 'OUTPUT');
                     $tr.data('action', 'OUTPUT='+pid);
                     $tr.click(function() {
                         one.f.flows.modal.action.add.modal.initialize(this);
                     });
                     one.f.flows.modal.action.table.append($tr);
-                    $modal.modal('hide');
                 },
                 add : function(name, action) {
                     var $tr = one.f.flows.modal.action.table.add(name);
@@ -1071,6 +1234,10 @@ one.f.flows = {
                 set : function(name, id, action, $modal) {
                     var $input = $('#'+id);
                     var value = $input.val();
+                    one.f.flows.modal.action.add.addDataToTable(name,value,action)
+                    $modal.modal('hide');
+                },
+                addDataToTable : function(name,value,action) {
                     var $tr = one.f.flows.modal.action.table.add(name, value);
                     $tr.attr('id', action);
                     $tr.data('action', action+'='+value);
@@ -1078,7 +1245,6 @@ one.f.flows = {
                         one.f.flows.modal.action.add.modal.initialize(this);
                     });
                     one.f.flows.modal.action.table.append($tr);
-                    $modal.modal('hide');
                 },
                 remove : function(that) {
                     $(that).remove();
@@ -1134,16 +1300,13 @@ one.f.flows = {
                 }
             },
             table : {
-                add : function(action, data, type) {
+                add : function(action, data) {
                     var $tr = $(document.createElement('tr'));
                     var $td = $(document.createElement('td'));
                     $td.append(action);
                     $tr.append($td);
                     var $td = $(document.createElement('td'));
                     if (data != undefined) $td.append(data);
-                    $tr.append($td);
-                    var $td = $(document.createElement('td'));
-                    if (type != undefined) $td.append(type);
                     $tr.append($td);
                     return $tr;
                 },
@@ -1166,10 +1329,12 @@ one.f.flows = {
                     var $fieldset = common[1];
                     // output port
                     $label = one.lib.form.label("Select Output Ports");
+                    if (one.f.flows.registry.currentNode == undefined){
+                        return; //Selecting Output ports without selecting node throws an exception
+                    }
                     var ports = one.f.flows.registry.nodeports[one.f.flows.registry.currentNode]['ports'];
                     $select = one.lib.form.select.create(ports, true);
                     $select.attr('id', one.f.flows.id.modal.action.addOutputPorts);
-                    one.lib.form.select.prepend($select, {'':'Select a Port'});
                     $fieldset.append($label).append($select);
                     $form.append($fieldset);
                     return $form;
@@ -1212,6 +1377,19 @@ one.f.flows = {
             var addButton = one.lib.dashlet.button.single("Save Flow", one.f.flows.id.modal.add, "btn-primary", "");
             var $addButton = one.lib.dashlet.button.button(addButton);
             footer.push($addButton);
+
+            var closeButton = one.lib.dashlet.button.single("Close", one.f.flows.id.modal.close, "", "");
+            var $closeButton = one.lib.dashlet.button.button(closeButton);
+            footer.push($closeButton);
+
+            return footer;
+        },
+        footerEdit : function() {
+            var footer = [];
+
+            var editButton = one.lib.dashlet.button.single("Save Flow", one.f.flows.id.modal.edit, "btn-success", "");
+            var $editButton = one.lib.dashlet.button.button(editButton);
+            footer.push($editButton);
 
             var closeButton = one.lib.dashlet.button.single("Close", one.f.flows.id.modal.close, "", "");
             var $closeButton = one.lib.dashlet.button.button(closeButton);
@@ -1286,6 +1464,8 @@ one.f.flows = {
             $.getJSON(one.f.address.root+one.f.address.flows.main, function(data) {
                 one.f.flows.registry['flows'] = data.flows;
                 one.f.flows.registry['privilege'] = data.privilege;
+                one.f.flows.modal.ajax.nodes(function(){/*Empty function. Do nothing. */})
+
                 callback(data);
             });
         }

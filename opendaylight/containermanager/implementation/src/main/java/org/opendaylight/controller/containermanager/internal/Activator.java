@@ -19,13 +19,16 @@ import org.apache.felix.dm.Component;
 import org.opendaylight.controller.clustering.services.ICacheUpdateAware;
 import org.opendaylight.controller.clustering.services.IClusterGlobalServices;
 import org.opendaylight.controller.configuration.IConfigurationAware;
+import org.opendaylight.controller.configuration.IConfigurationService;
 import org.opendaylight.controller.containermanager.IContainerAuthorization;
 import org.opendaylight.controller.sal.core.ComponentActivatorAbstractBase;
 import org.opendaylight.controller.sal.core.IContainer;
 import org.opendaylight.controller.sal.core.IContainerAware;
 import org.opendaylight.controller.sal.core.IContainerListener;
+import org.opendaylight.controller.sal.core.IContainerLocalListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 
 public class Activator extends ComponentActivatorAbstractBase {
     protected static final Logger logger = LoggerFactory.getLogger(Activator.class);
@@ -128,6 +131,11 @@ public class Activator extends ComponentActivatorAbstractBase {
                     .setCallbacks("setClusterServices", "unsetClusterServices")
                     .setRequired(true));
 
+            c.add(createServiceDependency().setService(
+                    IConfigurationService.class).setCallbacks(
+                    "setConfigurationService",
+                    "unsetConfigurationService").setRequired(true));
+
             // Key kick-starter for container creation in each component
             c.add(createServiceDependency().setService(IContainerAware.class)
                     .setCallbacks("setIContainerAware", "unsetIContainerAware")
@@ -139,6 +147,12 @@ public class Activator extends ComponentActivatorAbstractBase {
             c.add(createServiceDependency()
                     .setService(IContainerListener.class)
                     .setCallbacks("setIContainerListener", "unsetIContainerListener")
+                    .setRequired(false));
+
+            // Interface expected to be exported by the Functional Modules
+            c.add(createServiceDependency()
+                    .setService(IContainerLocalListener.class)
+                    .setCallbacks("setIContainerLocalListener", "unsetIContainerLocalListener")
                     .setRequired(false));
         }
     }

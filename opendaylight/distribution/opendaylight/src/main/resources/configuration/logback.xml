@@ -36,11 +36,16 @@
   <!--  Base log level  -->
   <logger name="org.opendaylight" level="INFO"/>
 
+
   <!-- Controller log level -->
   <logger name="org.opendaylight.controller" level="INFO"/>
 
   <!-- OSGi logging bridge -->
   <logger name="org.opendaylight.controller.logging.bridge" level="WARN"/>
+  <logger name="org.opendaylight.controller.logging.bridge.internal" level="WARN"/>
+
+  <!-- Netty -->
+  <logger name="io.netty" level="WARN"/>
 
   <!-- Openflow Protocol Plugin -->
   <logger name="org.opendaylight.controller.protocol_plugin.openflow" level="INFO"/>
@@ -57,6 +62,8 @@
   <logger name="org.opendaylight.controller.sal.implementation" level="INFO"/>
   <logger name="org.opendaylight.controller.sal.implementation.internal.Inventory" level="INFO"/>
   <logger name="org.opendaylight.controller.sal.implementation.internal.Topology" level="INFO"/>
+     <!-- remoterpc router and remoterpc routing table -->
+  <logger name="org.opendaylight.controller.sal.connector.remoterpc" level="INFO" />
   <!-- Functional Modules -->
   <logger name="org.opendaylight.controller.arphandler" level="INFO"/>
   <logger name="org.opendaylight.controller.hosttracker" level="INFO"/>
@@ -68,6 +75,21 @@
   <logger name="org.opendaylight.controller.usermanager" level="INFO"/>
   <!-- Web modules -->
   <logger name="org.opendaylight.controller.web" level="INFO"/>
+
+  <!--
+       Unsynchronized controller startup causes models to crop up in random
+       order, which results in temporary inability to fully resolve a model,
+       which is usually resolved. Do not flood console, but keep the messages,
+       as they may be indicating and error.
+  -->
+  <logger name="org.opendaylight.yangtools.yang.parser.util.ModuleDependencySort" level="INFO" additivity="false">
+    <appender-ref ref="opendaylight.log"/>
+  </logger>
+
+  <!-- To debug MD-SAL schema loading issues, uncomment this -->
+  <!--logger name="org.opendaylight.yangtools.yang.parser.impl.util.URLSchemaContextResolver" level="DEBUG"/>
+  <logger name="org.opendaylight.yangtools.sal.binding.generator.impl.RuntimeGeneratedMappingServiceImpl" level="TRACE"/-->
+
   <!-- additivity=false ensures analytics data only goes to the analytics log -->
   <logger name="audit" level="INFO" additivity="false">
        <appender-ref ref="audit-file"/>

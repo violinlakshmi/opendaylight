@@ -1,20 +1,20 @@
+/*
+ * Copyright (c) 2014 Cisco Systems, Inc. and others.  All rights reserved.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License v1.0 which accompanies this distribution,
+ * and is available at http://www.eclipse.org/legal/epl-v10.html
+ */
 package org.opendaylight.controller.protocol_plugins.stub.internal;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Dictionary;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 
-import org.apache.felix.dm.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.opendaylight.controller.sal.core.Actions;
@@ -32,8 +32,6 @@ import org.opendaylight.controller.sal.core.TimeStamp;
 import org.opendaylight.controller.sal.core.UpdateType;
 import org.opendaylight.controller.sal.inventory.IPluginInInventoryService;
 import org.opendaylight.controller.sal.inventory.IPluginOutInventoryService;
-import org.opendaylight.controller.sal.utils.NodeCreator;
-import org.opendaylight.controller.sal.utils.NodeConnectorCreator;
 
 /**
  * Stub Implementation for IPluginInReadService used by SAL
@@ -72,6 +70,12 @@ public class InventoryService implements IPluginInInventoryService {
         if (this.pluginOutInventoryServices != null) {
             this.pluginOutInventoryServices.remove(service);
         }
+    }
+
+    @Override
+    public Set<Node> getConfiguredNotConnectedNodes() {
+        // TODO
+        return null;
     }
 
     /**

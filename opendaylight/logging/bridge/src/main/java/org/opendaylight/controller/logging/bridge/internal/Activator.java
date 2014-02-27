@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) 2013 Cisco Systems, Inc. and others.  All rights reserved.
  *
@@ -6,15 +5,16 @@
  * terms of the Eclipse Public License v1.0 which accompanies this distribution,
  * and is available at http://www.eclipse.org/legal/epl-v10.html
  */
-
 package org.opendaylight.controller.logging.bridge.internal;
 
 import org.osgi.service.log.LogEntry;
+
+import java.lang.Thread.UncaughtExceptionHandler;
 import java.util.Enumeration;
+
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.BundleActivator;
-import org.osgi.framework.ServiceRegistration;
 import org.osgi.framework.ServiceReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,7 +22,11 @@ import org.slf4j.ILoggerFactory;
 import org.osgi.service.log.LogReaderService;
 
 public class Activator implements BundleActivator {
+    private static final String UNCAUGHT_EXCEPTION_POLICY_PROP = "controller.uncaughtExceptionPolicy";
+    private static final UncaughtExceptionPolicy DEFAULT_UNCAUGHT_EXCEPTION_POLICY = UncaughtExceptionPolicy.IGNORE;
+
     private LogListenerImpl listener = null;
+    private ShutdownHandler shutdownHandler = null;
     private Logger log = null;
 
     @Override
@@ -46,14 +50,15 @@ public class Activator implements BundleActivator {
                 if (reader == null) {
                     this.log.error("Cannot register the LogListener because "
                             + "cannot retrieve LogReaderService");
-                }
-                reader.addLogListener(this.listener);
-                // Now lets walk all the exiting messages
-                Enumeration<LogEntry> entries = reader.getLog();
-                if (entries != null) {
-                    while (entries.hasMoreElements()) {
-                        LogEntry entry = (LogEntry) entries.nextElement();
-                        this.listener.logged(entry);
+                } else {
+                    reader.addLogListener(this.listener);
+                    // Now lets walk all the exiting messages
+                    Enumeration<LogEntry> entries = reader.getLog();
+                    if (entries != null) {
+                        while (entries.hasMoreElements()) {
+                            LogEntry entry = entries.nextElement();
+                            this.listener.logged(entry);
+                        }
                     }
                 }
 
@@ -63,16 +68,25 @@ public class Activator implements BundleActivator {
                  * handler will display the exceptions to OSGI console as well
                  * as log to file.
                  */
-                Thread.setDefaultUncaughtExceptionHandler(new org.opendaylight.
-                        controller.logging.bridge.internal.UncaughtExceptionHandler());
+                UncaughtExceptionHandler handler = DEFAULT_UNCAUGHT_EXCEPTION_POLICY;
+                final String policy = context.getProperty(UNCAUGHT_EXCEPTION_POLICY_PROP);
+                if (policy != null) {
+                    try {
+                        handler = UncaughtExceptionPolicy.valueOf(policy.toUpperCase());
+                    } catch (IllegalArgumentException ex) {
+                        log.warn("Invalid policy name \"{}\", defaulting to {}", policy, handler);
+                    }
+                }
+                log.trace("Setting uncaught exception policy to {}", handler);
+                Thread.setDefaultUncaughtExceptionHandler(handler);
 
                 /*
                  * Install the Shutdown handler. This will intercept SIGTERM signal and
                  * close the system bundle. This allows for a graceful  closing of OSGI
                  * framework.
                  */
-
-                Runtime.getRuntime().addShutdownHook(new shutdownHandler(context));
+                shutdownHandler = new ShutdownHandler(context);
+                Runtime.getRuntime().addShutdownHook(shutdownHandler);
             } else {
                 this.log.error("Cannot register the LogListener because "
                         + "cannot retrieve LogReaderService");
@@ -85,20 +99,23 @@ public class Activator implements BundleActivator {
 
     @Override
     public void stop(BundleContext context) {
-        ServiceReference service = null;
-        service = context.getServiceReference(LogReaderService.class.getName());
-        if (service != null) {
-            LogReaderService reader = (LogReaderService) service;
+        ServiceReference serviceRef = context.getServiceReference(
+                LogReaderService.class.getName());
+        if (serviceRef != null) {
+            LogReaderService reader = (LogReaderService) context.getService(serviceRef);
             reader.removeLogListener(this.listener);
         }
-
+        if (this.shutdownHandler != null) {
+            Runtime.getRuntime().removeShutdownHook(this.shutdownHandler);
+        }
         this.listener = null;
         this.log = null;
+        this.shutdownHandler = null;
     }
 
-    private class shutdownHandler extends Thread {
+    private class ShutdownHandler extends Thread {
         BundleContext bundlecontext;
-        public shutdownHandler(BundleContext ctxt) {
+        public ShutdownHandler(BundleContext ctxt) {
                 this.bundlecontext = ctxt;
         }
 

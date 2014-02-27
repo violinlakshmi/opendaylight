@@ -9,20 +9,20 @@ package org.opendaylight.controller.sal.dom.broker;
 
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
-import org.opendaylight.controller.sal.core.api.BrokerService;
 import org.opendaylight.controller.sal.core.api.Broker.ConsumerSession;
 import org.opendaylight.controller.sal.core.api.Broker.ProviderSession;
+import org.opendaylight.controller.sal.core.api.BrokerService;
 import org.opendaylight.controller.sal.core.api.Consumer.ConsumerFunctionality;
 import org.opendaylight.controller.sal.core.api.Provider.ProviderFunctionality;
 import org.opendaylight.controller.sal.core.api.notify.NotificationListener;
-import org.opendaylight.controller.sal.core.api.notify.NotificationProviderService;
+import org.opendaylight.controller.sal.core.api.notify.NotificationPublishService;
 import org.opendaylight.controller.sal.core.api.notify.NotificationService;
 import org.opendaylight.controller.sal.core.spi.BrokerModule;
+import org.opendaylight.yangtools.concepts.Registration;
 import org.opendaylight.yangtools.yang.common.QName;
 import org.opendaylight.yangtools.yang.data.api.CompositeNode;
 import org.slf4j.Logger;
@@ -36,12 +36,12 @@ public class NotificationModule implements BrokerModule {
     private static Logger log = LoggerFactory
             .getLogger(NotificationModule.class);
 
-    private Multimap<QName, NotificationListener> listeners = HashMultimap
+    private final Multimap<QName, NotificationListener> listeners = HashMultimap
             .create();
 
     private static final Set<Class<? extends BrokerService>> PROVIDED_SERVICE_TYPE = ImmutableSet
-            .of((Class<? extends BrokerService>) NotificationService.class,
-                    NotificationProviderService.class);
+            .<Class<? extends BrokerService>>of(NotificationService.class,
+                    NotificationPublishService.class);
 
     private static final Set<Class<? extends ConsumerFunctionality>> SUPPORTED_CONSUMER_FUNCTIONALITY = ImmutableSet
             .of((Class<? extends ConsumerFunctionality>) NotificationListener.class,
@@ -63,10 +63,10 @@ public class NotificationModule implements BrokerModule {
     @Override
     public <T extends BrokerService> T getServiceForSession(Class<T> service,
             ConsumerSession session) {
-        if (NotificationProviderService.class.equals(service)
+        if (NotificationPublishService.class.equals(service)
                 && session instanceof ProviderSession) {
             @SuppressWarnings("unchecked")
-            T ret = (T) newNotificationProviderService(session);
+            T ret = (T) newNotificationPublishService(session);
             return ret;
         } else if (NotificationService.class.equals(service)) {
 
@@ -82,7 +82,7 @@ public class NotificationModule implements BrokerModule {
     private void sendNotification(CompositeNode notification) {
         QName type = notification.getNodeType();
         Collection<NotificationListener> toNotify = listeners.get(type);
-        log.info("Publishing notification " + type);
+        log.trace("Publishing notification " + type);
 
         if (toNotify == null) {
             // No listeners were registered - returns.
@@ -105,7 +105,7 @@ public class NotificationModule implements BrokerModule {
         return new NotificationConsumerSessionImpl();
     }
 
-    private NotificationProviderService newNotificationProviderService(
+    private NotificationPublishService newNotificationPublishService(
             ConsumerSession session) {
         return new NotificationProviderSessionImpl();
     }
@@ -113,12 +113,13 @@ public class NotificationModule implements BrokerModule {
     private class NotificationConsumerSessionImpl implements
             NotificationService {
 
-        private Multimap<QName, NotificationListener> consumerListeners = HashMultimap
+        private final Multimap<QName, NotificationListener> consumerListeners = HashMultimap
                 .create();
         private boolean closed = false;
 
+
         @Override
-        public void addNotificationListener(QName notification,
+        public Registration<NotificationListener> addNotificationListener(QName notification,
                 NotificationListener listener) {
             checkSessionState();
             if (notification == null) {
@@ -131,10 +132,10 @@ public class NotificationModule implements BrokerModule {
 
             consumerListeners.put(notification, listener);
             listeners.put(notification, listener);
-            log.info("Registered listener for notification: " + notification);
+            log.trace("Registered listener for notification: " + notification);
+            return null; // Return registration Object.
         }
 
-        @Override
         public void removeNotificationListener(QName notification,
                 NotificationListener listener) {
             checkSessionState();
@@ -149,7 +150,6 @@ public class NotificationModule implements BrokerModule {
             listeners.remove(notification, listener);
         }
 
-        @Override
         public void closeSession() {
             closed = true;
             Map<QName, Collection<NotificationListener>> toRemove = consumerListeners
@@ -168,7 +168,7 @@ public class NotificationModule implements BrokerModule {
 
     private class NotificationProviderSessionImpl extends
             NotificationConsumerSessionImpl implements
-            NotificationProviderService {
+            NotificationPublishService {
 
         @Override
         public void sendNotification(CompositeNode notification) {
@@ -177,6 +177,11 @@ public class NotificationModule implements BrokerModule {
                 throw new IllegalArgumentException(
                         "Notification must not be null.");
             NotificationModule.this.sendNotification(notification);
+        }
+
+        @Override
+        public void publish(CompositeNode notification) {
+            sendNotification(notification);
         }
     }
 

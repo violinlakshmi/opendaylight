@@ -15,13 +15,16 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
+import org.opendaylight.controller.configuration.ConfigurationObject;
 import org.opendaylight.controller.sal.match.Match;
 import org.opendaylight.controller.sal.match.MatchType;
 import org.opendaylight.controller.sal.packet.BitBufferHelper;
@@ -42,18 +45,19 @@ import org.slf4j.LoggerFactory;
  */
 @XmlRootElement (name = "flow-spec-config")
 @XmlAccessorType(XmlAccessType.NONE)
-public class ContainerFlowConfig implements Serializable {
+public class ContainerFlowConfig extends ConfigurationObject implements Serializable {
     private static Logger log = LoggerFactory.getLogger(ContainerFlowConfig.class);
 
     /** The Constant serialVersionUID. */
     private static final long serialVersionUID = 1L;
 
-    /** The Constant regexName. */
-    private static final String regexName = "^[\\w-+.@]+$";
-
     /** Flow Spec name. */
     @XmlElement
     private String name;
+
+    /** The vlan. */
+    @XmlElement
+    private String dlVlan;
 
     /** The network Source. */
     @XmlElement
@@ -101,6 +105,7 @@ public class ContainerFlowConfig implements Serializable {
     public ContainerFlowConfig(String name, String srcIP, String dstIP, String proto, String srcPort,
             String dstPort) {
         this.name = name;
+        this.dlVlan = null;
         this.nwSrc = srcIP;
         this.nwDst = dstIP;
         this.protocol = proto;
@@ -109,9 +114,21 @@ public class ContainerFlowConfig implements Serializable {
         //this.unidirectional = false;
     }
 
+    public ContainerFlowConfig(String name, String dlVlan, String srcIP, String dstIP, String proto, String srcPort,
+            String dstPort) {
+        this.name = name;
+        this.dlVlan = dlVlan;
+        this.nwSrc = srcIP;
+        this.nwDst = dstIP;
+        this.protocol = proto;
+        this.tpSrc = srcPort;
+        this.tpDst = dstPort;
+    }
+
 
     public ContainerFlowConfig(ContainerFlowConfig containerFlowConfig) {
         this.name = containerFlowConfig.name;
+        this.dlVlan = containerFlowConfig.dlVlan;
         this.nwSrc = containerFlowConfig.nwSrc;
         this.nwDst = containerFlowConfig.nwDst;
         this.protocol = containerFlowConfig.protocol;
@@ -128,6 +145,15 @@ public class ContainerFlowConfig implements Serializable {
     public String getName() {
         // mandatory field
         return name;
+    }
+
+    /**
+     * Returns the vlan id.
+     *
+     * @return the Vlan Id
+     */
+    public String getVlan() {
+        return (dlVlan == null || dlVlan.isEmpty()) ? null : dlVlan;
     }
 
     /**
@@ -192,6 +218,7 @@ public class ContainerFlowConfig implements Serializable {
         result = prime * result
                 + ((protocol == null) ? 0 : protocol.hashCode());
         result = prime * result + ((name == null) ? 0 : name.hashCode());
+        result = prime * result + ((dlVlan == null) ? 0 : dlVlan.hashCode());
         result = prime * result + ((nwDst == null) ? 0 : nwDst.hashCode());
         result = prime * result + ((tpDst == null) ? 0 : tpDst.hashCode());
         result = prime * result + ((nwSrc == null) ? 0 : nwSrc.hashCode());
@@ -221,7 +248,7 @@ public class ContainerFlowConfig implements Serializable {
             return false;
         }
         ContainerFlowConfig other = (ContainerFlowConfig) obj;
-        if (matchName(other) && matchSrcIP(other)
+        if (matchName(other) && matchDlVlan(other) && matchSrcIP(other)
                 && matchDstIP(other) && matchProtocol(other)
                 && matchSrcPort(other) && matchDstPort(other)) {
             return true;
@@ -280,6 +307,23 @@ public class ContainerFlowConfig implements Serializable {
         return name.equals(flowSpec.name);
     }
 
+    /**
+     * Match the set of these vlans with that of flowSpec's vlans.
+     *
+     * @param flowSpec
+     *            Flow Specification
+     * @return true, if successful
+     */
+    private boolean matchDlVlan(ContainerFlowConfig flowSpec) {
+        if (dlVlan == flowSpec.dlVlan) {
+            return true;
+        }
+        if (dlVlan == null || flowSpec.dlVlan == null) {
+            return false;
+        }
+
+        return this.getVlanList().equals(flowSpec.getVlanList());
+    }
 
     /**
      * Match Source IP Address.
@@ -359,6 +403,37 @@ public class ContainerFlowConfig implements Serializable {
             return false;
         }
         return this.tpDst.equals(flowSpec.tpDst);
+    }
+
+    /**
+     * Returns the vlan id number for all vlans specified
+     *
+     * @return the vlan id number for all vlans specified
+     */
+    public Set<Short> getVlanList() {
+        /*
+         * example: Vlan = "1,3,5-12"
+         * elemArray = ["1" "3" "5-12"]
+         * elem[2] = "5-12" --> limits = ["5" "12"]
+         * vlanList = [1 3 5 6 7 8 9 10 11 12]
+         */
+        Set<Short> vlanList = new HashSet<Short>();
+        try {
+            String[] elemArray = dlVlan.split(",");
+            for (String elem : elemArray) {
+                if (elem.contains("-")) {
+                    String[] limits = elem.split("-");
+                    for (short j = Short.valueOf(limits[0]); j <= Short.valueOf(limits[1]); j++) {
+                        vlanList.add(Short.valueOf(j));
+                    }
+                } else {
+                    vlanList.add(Short.valueOf(elem));
+                }
+            }
+        } catch (NumberFormatException e) {
+
+        }
+        return vlanList;
     }
 
     /**
@@ -519,10 +594,14 @@ public class ContainerFlowConfig implements Serializable {
      * @return true, if is valid
      */
     public Status validate() {
-        if (!hasValidName()) {
+        if (!isValidResourceName(name)) {
             return new Status(StatusCode.BADREQUEST, "Invalid name");
         }
-        Status status = validateIPs();
+        Status status = validateVlan();
+        if (!status.isSuccess()) {
+            return status;
+        }
+        status = validateIPs();
         if (!status.isSuccess()) {
             return status;
         }
@@ -539,12 +618,35 @@ public class ContainerFlowConfig implements Serializable {
     }
 
     /**
-     * Checks if this flow specification configuration has a valid name.
+     * Validates the vlan number
      *
-     * @return true, if successful
+     * @return the result of the check as Status object
      */
-    private boolean hasValidName() {
-        return (name != null && !name.isEmpty() && name.matches(regexName));
+    private Status validateVlan() {
+        if (dlVlan != null) {
+            short vlanId = 0;
+            try {
+                String[] elemArray = dlVlan.split(",");
+                for (String elem : elemArray) {
+                    if (elem.contains("-")) {
+                        String[] limits = elem.split("-");
+                        if (Short.parseShort(limits[0]) < 0
+                                || Short.parseShort(limits[0]) >= Short.parseShort(limits[1])
+                                || Short.parseShort(limits[1]) > 0xfff) {
+                            return new Status(StatusCode.BADREQUEST, "Invalid vlan id");
+                        }
+                    } else {
+                        vlanId = Short.parseShort(elem);
+                        if (vlanId < 0 || vlanId > 0xfff) {
+                            return new Status(StatusCode.BADREQUEST, "Invalid vlan id");
+                        }
+                    }
+                }
+            } catch (NumberFormatException e) {
+                return new Status(StatusCode.BADREQUEST, "Invalid vlan id");
+            }
+        }
+        return new Status(StatusCode.SUCCESS);
     }
 
     /**
@@ -625,18 +727,47 @@ public class ContainerFlowConfig implements Serializable {
 
     /**
      * Returns the matches.
-     * If unidirectional flag is set, there will be only one match in the list
-     * If unidirectional flag is unset there will be two matches in the list,
+     * If unidirectional flag is set, there will be only one match per vlan in the list
+     * If unidirectional flag is unset there will be two matches per vlan in the list,
      * only if the specified flow has an intrinsic direction.
      * For Ex. if the cFlow only has the protocol field configured, no matter
-     * if unidirectional flag is set or not, only one match will be returned
+     * if unidirectional flag is set or not, only one match per vlan will be returned
      * The client just has to iterate over the returned list
      * @return the matches
      */
     public List<Match> getMatches() {
         List<Match> matches = new ArrayList<Match>();
+
+        if (this.dlVlan != null && !this.dlVlan.isEmpty()) {
+            for(Short vlan:getVlanList()){
+                Match match = getMatch(vlan);
+                matches.add(match);
+            }
+        }
+        else{
+            Match match = getMatch(null);
+            matches.add(match);
+        }
+
+        if (!ContainerFlowConfig.unidirectional) {
+            List<Match> forwardMatches = new ArrayList<Match>(matches);
+            for (Match match : forwardMatches) {
+                Match reverse = match.reverse();
+                if (!match.equals(reverse)) {
+                    matches.add(reverse);
+                }
+            }
+        }
+
+        return matches;
+    }
+
+    private Match getMatch(Short vlan){
         Match match = new Match();
 
+        if (vlan != null) {
+            match.setField(MatchType.DL_VLAN, vlan);
+        }
         if (this.nwSrc != null && !this.nwSrc.trim().isEmpty()) {
             String parts[] = this.nwSrc.split("/");
             InetAddress ip = NetUtils.parseInetAddress(parts[0]);
@@ -672,15 +803,7 @@ public class ContainerFlowConfig implements Serializable {
         if (this.tpDst != null && !this.tpDst.trim().isEmpty()) {
             match.setField(MatchType.TP_DST, Integer.valueOf(tpDst).shortValue());
         }
-
-        matches.add(match);
-        if(!ContainerFlowConfig.unidirectional) {
-            Match reverse = match.reverse();
-            if (!match.equals(reverse)) {
-                matches.add(reverse);
-            }
-        }
-        return matches;
+        return match;
     }
 
     /*
@@ -690,7 +813,7 @@ public class ContainerFlowConfig implements Serializable {
      */
     @Override
     public String toString() {
-        return "Container Flow={name:" + name + " nwSrc:" + nwSrc + " nwDst:" + nwDst + " " + "protocol:" + protocol
+        return "Container Flow={name:" + name + " dlVlan:" + dlVlan + " nwSrc:" + nwSrc + " nwDst:" + nwDst + " " + "protocol:" + protocol
                 + " tpSrc:" + tpSrc + " tpDst:" + tpDst + "}";
     }
 }

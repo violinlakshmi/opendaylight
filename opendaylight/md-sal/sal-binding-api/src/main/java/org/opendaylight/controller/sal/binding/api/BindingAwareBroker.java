@@ -7,8 +7,13 @@
  */
 package org.opendaylight.controller.sal.binding.api;
 
+import org.opendaylight.controller.md.sal.common.api.routing.RoutedRegistration;
+import org.opendaylight.controller.sal.binding.api.BindingAwareProvider.ProviderFunctionality;
 import org.opendaylight.controller.sal.binding.api.data.DataBrokerService;
 import org.opendaylight.controller.sal.binding.api.data.DataProviderService;
+import org.opendaylight.yangtools.concepts.Registration;
+import org.opendaylight.yangtools.yang.binding.BaseIdentity;
+import org.opendaylight.yangtools.yang.binding.InstanceIdentifier;
 import org.opendaylight.yangtools.yang.binding.RpcService;
 import org.osgi.framework.BundleContext;
 
@@ -121,7 +126,7 @@ public interface BindingAwareBroker {
      * 
      * 
      */
-    public interface ConsumerContext {
+    public interface ConsumerContext extends RpcConsumerRegistry {
 
         /**
          * Returns a session specific instance (implementation) of requested
@@ -133,15 +138,7 @@ public interface BindingAwareBroker {
          */
         <T extends BindingAwareService> T getSALService(Class<T> service);
 
-        /**
-         * Returns a session specific instance (implementation) of requested
-         * YANG module implentation / service provided by consumer.
-         * 
-         * @param service
-         *            Broker service
-         * @return Session specific implementation of service
-         */
-        <T extends RpcService> T getRpcService(Class<T> module);
+
     }
 
     /**
@@ -160,15 +157,45 @@ public interface BindingAwareBroker {
      * functionality provided by other {@link BindingAwareConsumer}s.
      * 
      */
-    public interface ProviderContext extends ConsumerContext {
+    public interface ProviderContext extends ConsumerContext, RpcProviderRegistry {
 
-        <T extends RpcService> RpcServiceRegistration<T> addRpcImplementation(Class<T> type, T implementation);
+        @Deprecated
+        void registerFunctionality(ProviderFunctionality functionality);
+
+        @Deprecated
+        void unregisterFunctionality(ProviderFunctionality functionality);
     }
 
-    public interface RpcServiceRegistration<T extends RpcService> {
+    public interface RpcRegistration<T extends RpcService> extends Registration<T> {
 
-        T getService();
+        Class<T> getServiceType();
+    }
 
-        void unregister();
+    public interface RoutedRpcRegistration<T extends RpcService> extends RpcRegistration<T>,
+            RoutedRegistration<Class<? extends BaseIdentity>, InstanceIdentifier<?>, T> {
+
+        /**
+         * Register particular instance identifier to be processed by this
+         * RpcService
+         * 
+         * Deprecated in favor of {@link RoutedRegistration#registerPath(Object, Object)}. 
+         * 
+         * @param context
+         * @param instance
+         */
+        @Deprecated
+        void registerInstance(Class<? extends BaseIdentity> context, InstanceIdentifier<?> instance);
+
+        /**
+         * Unregister particular instance identifier to be processed by this
+         * RpcService
+         * 
+         * Deprecated in favor of {@link RoutedRegistration#unregisterPath(Object, Object)}. 
+         * 
+         * @param context
+         * @param instance
+         */
+        @Deprecated
+        void unregisterInstance(Class<? extends BaseIdentity> context, InstanceIdentifier<?> instance);
     }
 }

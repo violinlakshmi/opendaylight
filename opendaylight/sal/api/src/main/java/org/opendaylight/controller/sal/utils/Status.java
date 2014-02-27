@@ -16,6 +16,7 @@ import java.io.Serializable;
  * a string which describes a failure reason (if any) in human readable form.
  */
 public class Status implements Serializable {
+    private static final long serialVersionUID = 0L;
     private StatusCode code;
     private String description;
     private long requestId;
@@ -100,7 +101,7 @@ public class Status implements Serializable {
      * @return true if the Status code is {@code StatusCode.SUCCESS}
      */
     public boolean isSuccess() {
-        return code == StatusCode.SUCCESS;
+        return code == StatusCode.SUCCESS || code == StatusCode.CREATED;
     }
 
     /**
@@ -129,15 +130,19 @@ public class Status implements Serializable {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
+        if (this == obj) {
             return true;
-        if (obj == null)
+        }
+        if (obj == null) {
             return false;
-        if (getClass() != obj.getClass())
+        }
+        if (getClass() != obj.getClass()) {
             return false;
+        }
         Status other = (Status) obj;
-        if (code != other.code)
+        if (code != other.code) {
             return false;
+        }
         return true;
     }
 }

@@ -12,7 +12,9 @@ import java.math.BigInteger;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.opendaylight.controller.protocol_plugin.openflow.vendorextension.v6extension.V6FlowMod;
 import org.opendaylight.controller.protocol_plugin.openflow.vendorextension.v6extension.V6Match;
@@ -20,6 +22,7 @@ import org.opendaylight.controller.sal.action.Action;
 import org.opendaylight.controller.sal.action.ActionType;
 import org.opendaylight.controller.sal.action.Controller;
 import org.opendaylight.controller.sal.action.Drop;
+import org.opendaylight.controller.sal.action.Enqueue;
 import org.opendaylight.controller.sal.action.Flood;
 import org.opendaylight.controller.sal.action.FloodAll;
 import org.opendaylight.controller.sal.action.HwPath;
@@ -54,6 +57,7 @@ import org.openflow.protocol.action.OFAction;
 import org.openflow.protocol.action.OFActionDataLayer;
 import org.openflow.protocol.action.OFActionDataLayerDestination;
 import org.openflow.protocol.action.OFActionDataLayerSource;
+import org.openflow.protocol.action.OFActionEnqueue;
 import org.openflow.protocol.action.OFActionNetworkLayerAddress;
 import org.openflow.protocol.action.OFActionNetworkLayerDestination;
 import org.openflow.protocol.action.OFActionNetworkLayerSource;
@@ -277,6 +281,15 @@ public class FlowConverter {
                     actionsLength += OFActionOutput.MINIMUM_LENGTH;
                     continue;
                 }
+                if (action.getType() == ActionType.ENQUEUE) {
+                    Enqueue a = (Enqueue) action;
+                    OFActionEnqueue ofAction = new OFActionEnqueue();
+                    ofAction.setPort(PortConverter.toOFPort(a.getPort()));
+                    ofAction.setQueueId(a.getQueue());
+                    actionsList.add(ofAction);
+                    actionsLength += OFActionEnqueue.MINIMUM_LENGTH;
+                    continue;
+                }
                 if (action.getType() == ActionType.DROP) {
                     continue;
                 }
@@ -410,7 +423,7 @@ public class FlowConverter {
                     continue;
                 }
                 if (action.getType() == ActionType.SET_NEXT_HOP) {
-                    logger.info("Unsupported action: {}", action);
+                    logger.warn("Unsupported action: {}", action);
                     continue;
                 }
             }
@@ -451,13 +464,10 @@ public class FlowConverter {
             if (port != null) {
                 ((OFFlowMod) fm).setOutPort(port);
             }
-            if (command == OFFlowMod.OFPFC_ADD
-                    || command == OFFlowMod.OFPFC_MODIFY
+            if (command == OFFlowMod.OFPFC_ADD || command == OFFlowMod.OFPFC_MODIFY
                     || command == OFFlowMod.OFPFC_MODIFY_STRICT) {
-                if (flow.getIdleTimeout() != 0 || flow.getHardTimeout() != 0) {
-                    // Instruct switch to let controller know when flow expires
-                    ((OFFlowMod) fm).setFlags((short) 1);
-                }
+                // Instruct switch to let controller know when flow is removed
+                ((OFFlowMod) fm).setFlags((short) 1);
             }
         } else {
             ((V6FlowMod) fm).setVendor();
@@ -475,13 +485,10 @@ public class FlowConverter {
             if (port != null) {
                 ((V6FlowMod) fm).setOutPort(port);
             }
-            if (command == OFFlowMod.OFPFC_ADD
-                    || command == OFFlowMod.OFPFC_MODIFY
+            if (command == OFFlowMod.OFPFC_ADD || command == OFFlowMod.OFPFC_MODIFY
                     || command == OFFlowMod.OFPFC_MODIFY_STRICT) {
-                if (flow.getIdleTimeout() != 0 || flow.getHardTimeout() != 0) {
-                    // Instruct switch to let controller know when flow expires
-                    ((V6FlowMod) fm).setFlags((short) 1);
-                }
+                // Instruct switch to let controller know when flow is removed
+                ((V6FlowMod) fm).setFlags((short) 1);
             }
         }
         logger.trace("Openflow Match: {} Openflow Actions: {}", ofMatch,
@@ -532,7 +539,7 @@ public class FlowConverter {
                         salMatch.setField(new MatchField(MatchType.DL_VLAN,
                                 vlan));
                     }
-                    if (ofMatch.getDataLayerVirtualLanPriorityCodePoint() != 0) {
+                    if ((ofMatch.getWildcards() & OFMatch.OFPFW_DL_VLAN_PCP) == 0) {
                         salMatch.setField(MatchType.DL_VLAN_PR, ofMatch
                                 .getDataLayerVirtualLanPriorityCodePoint());
                     }
@@ -605,7 +612,7 @@ public class FlowConverter {
                         salMatch.setField(new MatchField(MatchType.DL_VLAN,
                                 vlan));
                     }
-                    if (v6Match.getDataLayerVirtualLanPriorityCodePoint() != 0) {
+                    if ((v6Match.getWildcards() & OFMatch.OFPFW_DL_VLAN_PCP) == 0) {
                         salMatch.setField(MatchType.DL_VLAN_PR, v6Match
                                 .getDataLayerVirtualLanPriorityCodePoint());
                     }
@@ -686,6 +693,10 @@ public class FlowConverter {
                                     NodeConnectorCreator.createOFNodeConnector(
                                             ofPort, node));
                         }
+                    } else if (ofAction instanceof OFActionEnqueue) {
+                        salAction = new Enqueue(NodeConnectorCreator.createOFNodeConnector(
+                                ((OFActionEnqueue) ofAction).getPort(), node),
+                                ((OFActionEnqueue) ofAction).getQueueId());
                     } else if (ofAction instanceof OFActionVirtualLanIdentifier) {
                         salAction = new SetVlanId(
                                 ((OFActionVirtualLanIdentifier) ofAction)
@@ -751,6 +762,52 @@ public class FlowConverter {
                 actionsList);
         logger.trace("SAL Flow: {}", flow);
         return flow;
+    }
+
+    private static final Map<Integer, Class<? extends Action>> actionMap = new HashMap<Integer, Class<? extends Action>>() {
+        private static final long serialVersionUID = 1L;
+        {
+            put(1 << 0, Output.class);
+            put(1 << 1, SetVlanId.class);
+            put(1 << 2, SetVlanPcp.class);
+            put(1 << 3, PopVlan.class);
+            put(1 << 4, SetDlSrc.class);
+            put(1 << 5, SetDlDst.class);
+            put(1 << 6, SetNwSrc.class);
+            put(1 << 7, SetNwDst.class);
+            put(1 << 8, SetNwTos.class);
+            put(1 << 9, SetTpSrc.class);
+            put(1 << 10, SetTpDst.class);
+            put(1 << 11, Enqueue.class);
+        }
+    };
+
+    /**
+     * Returns the supported flow actions for the netwrok node given the bitmask
+     * representing the actions the Openflow 1.0 switch supports
+     *
+     * @param ofActionBitmask
+     *            OF 1.0 action bitmask
+     * @return The correspondent list of SAL Action classes
+     */
+    public static List<Class<? extends Action>> getFlowActions(int ofActionBitmask) {
+        List<Class<? extends Action>> list = new ArrayList<Class<? extends Action>>();
+
+        for (int i = 0; i < Integer.SIZE; i++) {
+            int index = 1 << i;
+            if ((index & ofActionBitmask) > 0) {
+                if (actionMap.containsKey(index)) {
+                    list.add(actionMap.get(index));
+                }
+            }
+        }
+        // Add implicit SAL actions
+        list.add(Controller.class);
+        list.add(SwPath.class);
+        list.add(HwPath.class);
+        list.add(Drop.class);
+
+        return list;
     }
 
 }

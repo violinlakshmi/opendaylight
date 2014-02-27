@@ -10,25 +10,26 @@ package org.opendaylight.controller.hosttracker.internal;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import junit.framework.TestCase;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.opendaylight.controller.hosttracker.IHostId;
+import org.opendaylight.controller.hosttracker.IPHostId;
 
-public class HostTrackerTest extends TestCase {
+public class HostTrackerTest {
 
     @Test
     public void testHostTrackerCallable() throws UnknownHostException {
 
         HostTracker hostTracker = null;
         hostTracker = new HostTracker();
-        Assert.assertFalse(hostTracker == null);
 
         InetAddress hostIP = InetAddress.getByName("192.168.0.8");
+        IHostId id  = IPHostId.fromIP(hostIP);
 
         HostTrackerCallable htCallable = new HostTrackerCallable(hostTracker,
-                hostIP);
-        Assert.assertTrue(htCallable.trackedHost.equals(hostIP));
+                id);
+        Assert.assertTrue(htCallable.trackedHost.equals(id));
         Assert.assertTrue(htCallable.hostTracker.equals(hostTracker));
 
         long count = htCallable.latch.getCount();
@@ -40,12 +41,13 @@ public class HostTrackerTest extends TestCase {
     public void testHostTracker() throws UnknownHostException {
         HostTracker hostTracker = null;
         hostTracker = new HostTracker();
-        Assert.assertFalse(hostTracker == null);
 
         InetAddress hostIP_1 = InetAddress.getByName("192.168.0.8");
+        IHostId id1 = IPHostId.fromIP(hostIP_1);
         InetAddress hostIP_2 = InetAddress.getByName("192.168.0.18");
-        hostTracker.discoverHost(hostIP_1);
-        hostTracker.discoverHost(hostIP_2);
+        IHostId id2 = IPHostId.fromIP(hostIP_2);
+        hostTracker.discoverHost(id1);
+        hostTracker.discoverHost(id2);
         hostTracker.nonClusterObjectCreate();
     }
 

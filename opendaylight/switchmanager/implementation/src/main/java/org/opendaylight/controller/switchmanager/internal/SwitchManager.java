@@ -35,7 +35,9 @@ import org.opendaylight.controller.clustering.services.CacheConfigException;
 import org.opendaylight.controller.clustering.services.CacheExistException;
 import org.opendaylight.controller.clustering.services.IClusterContainerServices;
 import org.opendaylight.controller.clustering.services.IClusterServices;
+import org.opendaylight.controller.configuration.ConfigurationObject;
 import org.opendaylight.controller.configuration.IConfigurationContainerAware;
+import org.opendaylight.controller.configuration.IConfigurationContainerService;
 import org.opendaylight.controller.sal.core.Bandwidth;
 import org.opendaylight.controller.sal.core.Config;
 import org.opendaylight.controller.sal.core.ConstructionException;
@@ -56,8 +58,6 @@ import org.opendaylight.controller.sal.reader.NodeDescription;
 import org.opendaylight.controller.sal.utils.GlobalConstants;
 import org.opendaylight.controller.sal.utils.HexEncode;
 import org.opendaylight.controller.sal.utils.IObjectReader;
-import org.opendaylight.controller.sal.utils.ObjectReader;
-import org.opendaylight.controller.sal.utils.ObjectWriter;
 import org.opendaylight.controller.sal.utils.Status;
 import org.opendaylight.controller.sal.utils.StatusCode;
 import org.opendaylight.controller.statisticsmanager.IStatisticsManager;
@@ -86,8 +86,9 @@ import org.slf4j.LoggerFactory;
 public class SwitchManager implements ISwitchManager, IConfigurationContainerAware,
                                       IObjectReader, IListenInventoryUpdates, CommandProvider {
     private static Logger log = LoggerFactory.getLogger(SwitchManager.class);
-    private static String ROOT = GlobalConstants.STARTUPHOME.toString();
-    private String subnetFileName, spanFileName, switchConfigFileName;
+    private static final String SUBNETS_FILE_NAME = "subnets.conf";
+    private static final String SPAN_FILE_NAME = "spanPorts.conf";
+    private static final String SWITCH_CONFIG_FILE_NAME = "switchConfig.conf";
     private final List<NodeConnector> spanNodeConnectors = new CopyOnWriteArrayList<NodeConnector>();
     // Collection of Subnets keyed by the InetAddress
     private ConcurrentMap<InetAddress, Subnet> subnets;
@@ -101,17 +102,29 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
     private ConcurrentMap<String, Property> controllerProps;
     private IInventoryService inventoryService;
     private IStatisticsManager statisticsManager;
+    private IConfigurationContainerService configurationService;
     private final Set<ISwitchManagerAware> switchManagerAware = Collections
             .synchronizedSet(new HashSet<ISwitchManagerAware>());
     private final Set<IInventoryListener> inventoryListeners = Collections
             .synchronizedSet(new HashSet<IInventoryListener>());
     private final Set<ISpanAware> spanAware = Collections.synchronizedSet(new HashSet<ISpanAware>());
-    private static boolean hostRefresh = true;
-    private int hostRetryCount = 5;
     private IClusterContainerServices clusterContainerService = null;
     private String containerName = null;
     private boolean isDefaultContainer = true;
     private static final int REPLACE_RETRY = 1;
+
+    /* Information about the default subnet. If there have been no configured subnets, i.e.,
+     * subnets.size() == 0 or subnetsConfigList.size() == 0, then this subnet will be the
+     * only subnet returned. As soon as a user-configured subnet is created this one will
+     * vanish.
+     */
+    protected static final SubnetConfig DEFAULT_SUBNETCONFIG;
+    protected static final Subnet DEFAULT_SUBNET;
+    protected static final String DEFAULT_SUBNET_NAME = "default (cannot be modifed)";
+    static{
+        DEFAULT_SUBNETCONFIG = new SubnetConfig(DEFAULT_SUBNET_NAME, "0.0.0.0/0", new ArrayList<String>());
+        DEFAULT_SUBNET = new Subnet(DEFAULT_SUBNETCONFIG);
+    }
 
     public void notifySubnetChange(Subnet sub, boolean add) {
         synchronized (switchManagerAware) {
@@ -153,29 +166,9 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
     }
 
     public void startUp() {
-        String container = this.getContainerName();
-        // Initialize configuration file names
-        subnetFileName = ROOT + "subnets_" + container + ".conf";
-        spanFileName = ROOT + "spanPorts_" + container + ".conf";
-        switchConfigFileName = ROOT + "switchConfig_" + container + ".conf";
-
         // Instantiate cluster synced variables
         allocateCaches();
         retrieveCaches();
-
-        /*
-         * Read startup and build database if we have not already gotten the
-         * configurations synced from another node
-         */
-        if (subnetsConfigList.isEmpty()) {
-            loadSubnetConfiguration();
-        }
-        if (spanConfigList.isEmpty()) {
-            loadSpanConfiguration();
-        }
-        if (nodeConfigList.isEmpty()) {
-            loadSwitchConfiguration();
-        }
 
         // Add controller MAC, if first node in the cluster
         if (!controllerProps.containsKey(MacAddress.name)) {
@@ -183,7 +176,7 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             if (controllerMac != null) {
                 Property existing = controllerProps.putIfAbsent(MacAddress.name, new MacAddress(controllerMac));
                 if (existing == null && log.isTraceEnabled()) {
-                    log.trace("Container {}: Setting controller MAC address in the cluster: {}", container,
+                    log.trace("Container {}: Setting controller MAC address in the cluster: {}", getContainerName(),
                             HexEncode.bytesToHexStringFormat(controllerMac));
                 }
             }
@@ -231,7 +224,7 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
     @SuppressWarnings({ "unchecked" })
     private void retrieveCaches() {
         if (this.clusterContainerService == null) {
-            log.info("un-initialized clusterContainerService, can't create cache");
+            log.warn("un-initialized clusterContainerService, can't create cache");
             return;
         }
 
@@ -297,12 +290,22 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
 
     @Override
     public List<SubnetConfig> getSubnetsConfigList() {
-        return new ArrayList<SubnetConfig>(subnetsConfigList.values());
+        // if there are no subnets, return the default subnet
+        if(subnetsConfigList.size() == 0){
+            return Collections.singletonList(DEFAULT_SUBNETCONFIG);
+        }else{
+            return new ArrayList<SubnetConfig>(subnetsConfigList.values());
+        }
     }
 
     @Override
     public SubnetConfig getSubnetConfig(String subnet) {
-        return subnetsConfigList.get(subnet);
+        // if there are no subnets, return the default subnet
+        if(subnetsConfigList.isEmpty() && subnet.equalsIgnoreCase(DEFAULT_SUBNET_NAME)){
+            return DEFAULT_SUBNETCONFIG;
+        }else{
+            return subnetsConfigList.get(subnet);
+        }
     }
 
     private List<SpanConfig> getSpanConfigList(Node node) {
@@ -349,14 +352,10 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
 
     @Override
     public List<Switch> getNetworkDevices() {
-        Set<Node> nodeSet = getNodes();
         List<Switch> swList = new ArrayList<Switch>();
-        if (nodeSet != null) {
-            for (Node node : nodeSet) {
-                swList.add(getSwitchByNode(node));
-            }
+        for (Node node : getNodes()) {
+            swList.add(getSwitchByNode(node));
         }
-
         return swList;
     }
 
@@ -407,11 +406,11 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
     }
 
     private Status semanticCheck(SubnetConfig conf) {
-        Subnet newSubnet = new Subnet(conf);
         Set<InetAddress> IPs = subnets.keySet();
         if (IPs == null) {
             return new Status(StatusCode.SUCCESS);
         }
+        Subnet newSubnet = new Subnet(conf);
         for (InetAddress i : IPs) {
             Subnet existingSubnet = subnets.get(i);
             if ((existingSubnet != null) && !existingSubnet.isMutualExclusive(newSubnet)) {
@@ -440,6 +439,10 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             if (!status.isSuccess()) {
                 return status;
             }
+        } else {
+            if (conf.getName().equalsIgnoreCase(DEFAULT_SUBNET_NAME)) {
+                return new Status(StatusCode.NOTALLOWED, "The specified subnet gateway cannot be removed");
+            }
         }
 
         // Update Database
@@ -450,6 +453,16 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             status = updateConfig(conf, isAdding);
             if(!status.isSuccess()) {
                 updateDatabase(conf, (!isAdding));
+            } else {
+                // update the listeners
+                Subnet subnetCurr = subnets.get(conf.getIPAddress());
+                Subnet subnet;
+                if (subnetCurr == null) {
+                    subnet = new Subnet(conf);
+                } else {
+                    subnet = subnetCurr.clone();
+                }
+                notifySubnetChange(subnet, isAdding);
             }
         }
 
@@ -471,6 +484,9 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
 
     @Override
     public Status removeSubnet(String name) {
+        if (name.equalsIgnoreCase(DEFAULT_SUBNET_NAME)) {
+            return new Status(StatusCode.NOTALLOWED, "The specified subnet gateway cannot be removed");
+        }
         SubnetConfig conf = subnetsConfigList.get(name);
         if (conf == null) {
             return new Status(StatusCode.SUCCESS, "Subnet not present");
@@ -648,12 +664,14 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
 
     @Override
     public Subnet getSubnetByNetworkAddress(InetAddress networkAddress) {
-        Subnet sub;
-        Set<InetAddress> indices = subnets.keySet();
-        for (InetAddress i : indices) {
-            sub = subnets.get(i);
-            if (sub.isSubnetOf(networkAddress)) {
-                return sub;
+        // if there are no subnets, return the default subnet
+        if (subnets.size() == 0) {
+            return DEFAULT_SUBNET;
+        }
+
+        for(Map.Entry<InetAddress,Subnet> subnetEntry : subnets.entrySet()) {
+            if(subnetEntry.getValue().isSubnetOf(networkAddress)) {
+                return subnetEntry.getValue();
             }
         }
         return null;
@@ -667,48 +685,21 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
         return ois.readObject();
     }
 
-    @SuppressWarnings("unchecked")
     private void loadSubnetConfiguration() {
-        ObjectReader objReader = new ObjectReader();
-        ConcurrentMap<String, SubnetConfig> confList = (ConcurrentMap<String, SubnetConfig>) objReader
-                .read(this, subnetFileName);
-
-        if (confList == null) {
-            return;
-        }
-
-        for (SubnetConfig conf : confList.values()) {
-            addSubnet(conf);
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, SUBNETS_FILE_NAME)) {
+            addSubnet((SubnetConfig) conf);
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void loadSpanConfiguration() {
-        ObjectReader objReader = new ObjectReader();
-        ConcurrentMap<Integer, SpanConfig> confList = (ConcurrentMap<Integer, SpanConfig>) objReader
-                .read(this, spanFileName);
-
-        if (confList == null) {
-            return;
-        }
-
-        for (SpanConfig conf : confList.values()) {
-            addSpanConfig(conf);
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, SPAN_FILE_NAME)) {
+            addSpanConfig((SpanConfig) conf);
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void loadSwitchConfiguration() {
-        ObjectReader objReader = new ObjectReader();
-        ConcurrentMap<String, SwitchConfig> confList = (ConcurrentMap<String, SwitchConfig>) objReader
-                .read(this, switchConfigFileName);
-
-        if (confList == null) {
-            return;
-        }
-
-        for (SwitchConfig conf : confList.values()) {
-            updateNodeConfig(conf);
+        for (ConfigurationObject conf : configurationService.retrieveConfiguration(this, SWITCH_CONFIG_FILE_NAME)) {
+            updateNodeConfig((SwitchConfig) conf);
         }
     }
 
@@ -754,7 +745,7 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             return;
         }
 
-        log.info("Set Node {}'s Mode to {}", nodeId, cfgObject.getMode());
+        log.trace("Set Node {}'s Mode to {}", nodeId, cfgObject.getMode());
 
         if (modeChange) {
             notifyModeChange(node, cfgObject.isProactive());
@@ -848,9 +839,14 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             String prop = entry.getKey();
             if (!updateProperties.containsKey(prop)) {
                 if (prop.equals(Description.propertyName)) {
-                    if (!advertisedDesc.isEmpty()) {
-                        Property desc = new Description(advertisedDesc);
-                        propMap.put(Description.propertyName, desc);
+                    if (advertisedDesc != null) {
+                        if (!advertisedDesc.isEmpty()) {
+                            Property desc = new Description(advertisedDesc);
+                            propMap.put(Description.propertyName, desc);
+                        }
+                    }
+                    else {
+                        propMap.remove(prop);
                     }
                     continue;
                 } else if (prop.equals(ForwardingMode.name)) {
@@ -909,24 +905,36 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
     }
 
     public Status saveSwitchConfigInternal() {
-        Status retS = null, retP = null;
-        ObjectWriter objWriter = new ObjectWriter();
-
-        retS = objWriter.write(new ConcurrentHashMap<String, SubnetConfig>(
-                subnetsConfigList), subnetFileName);
-        retP = objWriter.write(new ConcurrentHashMap<SpanConfig, SpanConfig>(
-                spanConfigList), spanFileName);
-        retS = objWriter.write(new ConcurrentHashMap<String, SwitchConfig>(
-                nodeConfigList), switchConfigFileName);
-        if (retS.equals(retP)) {
-            if (retS.isSuccess()) {
-                return retS;
-            } else {
-                return new Status(StatusCode.INTERNALERROR, "Save failed");
-            }
+        Status status;
+        short number = 0;
+        status = configurationService.persistConfiguration(
+                new ArrayList<ConfigurationObject>(subnetsConfigList.values()), SUBNETS_FILE_NAME);
+        if (status.isSuccess()) {
+            number++;
         } else {
+            log.warn("Failed to save subnet gateway configurations: " + status.getDescription());
+        }
+        status = configurationService.persistConfiguration(new ArrayList<ConfigurationObject>(spanConfigList.values()),
+                SPAN_FILE_NAME);
+        if (status.isSuccess()) {
+            number++;
+        } else {
+            log.warn("Failed to save span port configurations: " + status.getDescription());
+        }
+        status = configurationService.persistConfiguration(new ArrayList<ConfigurationObject>(nodeConfigList.values()),
+                SWITCH_CONFIG_FILE_NAME);
+        if (status.isSuccess()) {
+            number++;
+        } else {
+            log.warn("Failed to save node configurations: " + status.getDescription());
+        }
+        if (number == 0) {
+            return new Status(StatusCode.INTERNALERROR, "Save failed");
+        }
+        if (number < 3) {
             return new Status(StatusCode.INTERNALERROR, "Partial save failure");
         }
+        return status;
     }
 
     @Override
@@ -996,7 +1004,8 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             }
         }
 
-        boolean proactiveForwarding = false;
+        boolean forwardingModeChanged = false;
+
         // copy node properties from config
         if (nodeConfigList != null) {
             String nodeId = node.toString();
@@ -1006,7 +1015,7 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
                 propMap.putAll(nodeProperties);
                 if (nodeProperties.get(ForwardingMode.name) != null) {
                     ForwardingMode mode = (ForwardingMode) nodeProperties.get(ForwardingMode.name);
-                    proactiveForwarding = mode.isProactive();
+                    forwardingModeChanged = mode.isProactive();
                 }
             }
         }
@@ -1015,28 +1024,35 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             Property defaultMode = new ForwardingMode(ForwardingMode.REACTIVE_FORWARDING);
             propMap.put(ForwardingMode.name, defaultMode);
         }
-        boolean result = false;
-        if (propMapCurr == null) {
-            if (nodeProps.putIfAbsent(node, propMap) == null) {
-                result = true;
-            }
+
+        boolean propsAdded = false;
+        // Attempt initial add
+        if (nodeProps.putIfAbsent(node, propMap) == null) {
+                propsAdded = true;
+
+                /* Notify listeners only for initial node addition
+                 * to avoid expensive tasks triggered by redundant notifications
+                 */
+                notifyNode(node, UpdateType.ADDED, propMap);
         } else {
-            result = nodeProps.replace(node, propMapCurr, propMap);
+
+            propsAdded = nodeProps.replace(node, propMapCurr, propMap);
+
+            // check whether forwarding mode changed
+            if (propMapCurr.get(ForwardingMode.name) != null) {
+                ForwardingMode mode = (ForwardingMode) propMapCurr.get(ForwardingMode.name);
+                forwardingModeChanged ^= mode.isProactive();
+            }
         }
-        if (!result) {
-            log.debug("Cluster conflict: Conflict while adding the node properties. Node: {}  Properties: {}",
-                    node.getID(), props);
+        if (!propsAdded) {
+            log.debug("Cluster conflict while adding node {}. Overwriting with latest props: {}", node.getID(), props);
             addNodeProps(node, propMap);
         }
 
-        // check if span ports are configed
+        // check if span ports are configured
         addSpanPorts(node);
-
-        // notify node listeners
-        notifyNode(node, UpdateType.ADDED, propMap);
-
         // notify proactive mode forwarding
-        if (proactiveForwarding) {
+        if (forwardingModeChanged) {
             notifyModeChange(node, true);
         }
     }
@@ -1046,7 +1062,12 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
         if (nodeProps == null) {
             return;
         }
-        nodeProps.remove(node);
+
+        if (nodeProps.remove(node) == null) {
+            log.debug("Received redundant node REMOVED udate for {}. Skipping..", node);
+            return;
+        }
+
         nodeConnectorNames.remove(node);
         Set<NodeConnector> removeNodeConnectorSet = new HashSet<NodeConnector>();
         for (Map.Entry<NodeConnector, Map<String, Property>> entry : nodeConnectorProps.entrySet()) {
@@ -1068,8 +1089,7 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
 
     private void updateNode(Node node, Set<Property> props) {
         log.trace("{} updated, props: {}", node, props);
-        if (nodeProps == null || !nodeProps.containsKey(node) ||
-                props == null || props.isEmpty()) {
+        if (nodeProps == null || props == null) {
             return;
         }
 
@@ -1142,6 +1162,13 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
 
         switch (type) {
         case ADDED:
+            // Skip redundant ADDED update (e.g. cluster switch-over)
+            if (nodeConnectorProps.containsKey(nodeConnector)) {
+                log.debug("Redundant nodeconnector ADDED for {}, props {} for container {}",
+                        nodeConnector, props, containerName);
+                update = false;
+            }
+
             if (props != null) {
                 for (Property prop : props) {
                     addNodeConnectorProp(nodeConnector, prop);
@@ -1150,6 +1177,7 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             } else {
                 addNodeConnectorProp(nodeConnector, null);
             }
+
 
             addSpanPort(nodeConnector);
             break;
@@ -1184,8 +1212,46 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
 
     @Override
     public Set<Node> getNodes() {
-        return (nodeProps != null) ? new HashSet<Node>(nodeProps.keySet())
-                : new HashSet<Node>();
+        return (nodeProps != null) ? new HashSet<Node>(nodeProps.keySet()) : new HashSet<Node>();
+    }
+
+    @Override
+    public Map<String, Property> getControllerProperties() {
+        return new HashMap<String, Property>(this.controllerProps);
+    }
+
+    @Override
+    public Property getControllerProperty(String propertyName) {
+        if (propertyName != null) {
+            HashMap<String, Property> propertyMap =  new HashMap<String, Property>(this.controllerProps);
+            return propertyMap.get(propertyName);
+        }
+        return null;
+    }
+
+    @Override
+    public Status setControllerProperty(Property property) {
+        if (property != null) {
+            this.controllerProps.put(property.getName(), property);
+            return new Status(StatusCode.SUCCESS);
+        }
+        return new Status(StatusCode.BADREQUEST, "Invalid property provided when setting property");
+    }
+
+    @Override
+    public Status removeControllerProperty(String propertyName) {
+        if (propertyName != null) {
+            if (this.controllerProps.containsKey(propertyName)) {
+                this.controllerProps.remove(propertyName);
+                if (!this.controllerProps.containsKey(propertyName)) {
+                    return new Status(StatusCode.SUCCESS);
+                }
+            }
+            String msg = "Unable to remove property " + propertyName + " from Controller";
+            return new Status(StatusCode.BADREQUEST, msg);
+        }
+        String msg = "Invalid property provided when removing property from Controller";
+        return new Status(StatusCode.BADREQUEST, msg);
     }
 
     /*
@@ -1232,10 +1298,6 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             if (nodeProps.replace(node, propMapCurr, propMap)) {
                 return;
             }
-            if (!propMapCurr.get(prop.getName()).equals(nodeProps.get(node).get(prop.getName()))) {
-                log.debug("Cluster conflict: Unable to add property {} to node {}.", prop.getName(), node.getID());
-                return;
-            }
         }
         log.warn("Cluster conflict: Unable to add property {} to node {}.", prop.getName(), node.getID());
     }
@@ -1253,12 +1315,6 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
                 if (nodeProps.replace(node, propMapCurr, propMap)) {
                     return new Status(StatusCode.SUCCESS);
                 }
-                if (!propMapCurr.get(propName).equals(nodeProps.get(node).get(propName))) {
-                    String msg = "Cluster conflict: Unable to remove property " + propName + " for node "
-                            + node.getID();
-                    return new Status(StatusCode.CONFLICT, msg);
-                }
-
             } else {
                 return new Status(StatusCode.SUCCESS);
             }
@@ -1367,7 +1423,7 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             } catch (SocketException e) {
                 log.error("Failed to acquire controller MAC: ", e);
             }
-            if (macAddress != null) {
+            if (macAddress != null && macAddress.length != 0) {
                 break;
             }
         }
@@ -1383,16 +1439,6 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
     public byte[] getControllerMAC() {
         MacAddress macProperty = (MacAddress)controllerProps.get(MacAddress.name);
         return (macProperty == null) ? null : macProperty.getMacAddress();
-    }
-
-    @Override
-    public boolean isHostRefreshEnabled() {
-        return hostRefresh;
-    }
-
-    @Override
-    public int getHostRetryCount() {
-        return hostRetryCount;
     }
 
     @Override
@@ -1600,7 +1646,6 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
         isDefaultContainer = containerName.equals(GlobalConstants.DEFAULT
                 .toString());
 
-        startUp();
     }
 
     /**
@@ -1619,6 +1664,15 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
      *
      */
     void start() {
+        startUp();
+
+        /*
+         * Read startup and build database if we are the coordinator
+         */
+        loadSubnetConfiguration();
+        loadSpanConfiguration();
+        loadSwitchConfiguration();
+
         // OSGI console
         registerWithOSGIConsole();
     }
@@ -1638,6 +1692,16 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
      *
      */
     void stop() {
+    }
+
+    public void setConfigurationContainerService(IConfigurationContainerService service) {
+        log.trace("Got configuration service set request {}", service);
+        this.configurationService = service;
+    }
+
+    public void unsetConfigurationContainerService(IConfigurationContainerService service) {
+        log.trace("Got configuration service UNset request");
+        this.configurationService = null;
     }
 
     public void setInventoryService(IInventoryService service) {
@@ -1844,14 +1908,17 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
     }
 
     @Override
+    public boolean doesNodeConnectorExist(NodeConnector nc) {
+        return (nc != null && nodeConnectorProps != null
+                && nodeConnectorProps.containsKey(nc));
+    }
+
+    @Override
     public String getHelp() {
         StringBuffer help = new StringBuffer();
         help.append("---Switch Manager---\n");
         help.append("\t pencs <node id>        - Print enabled node connectors for a given node\n");
         help.append("\t pdm <node id>          - Print switch ports in device map\n");
-        help.append("\t snt <node id> <tier>   - Set node tier number\n");
-        help.append("\t hostRefresh <on/off/?> - Enable/Disable/Query host refresh\n");
-        help.append("\t hostRetry <count>      - Set host retry count\n");
         return help.toString();
     }
 
@@ -1934,66 +2001,6 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
         }
     }
 
-    public void _snt(CommandInterpreter ci) {
-        String st = ci.nextArgument();
-        if (st == null) {
-            ci.println("Please enter node id");
-            return;
-        }
-
-        Node node = Node.fromString(st);
-        if (node == null) {
-            ci.println("Please enter node id");
-            return;
-        }
-
-        st = ci.nextArgument();
-        if (st == null) {
-            ci.println("Please enter tier number");
-            return;
-        }
-        Integer tid = Integer.decode(st);
-        Tier tier = new Tier(tid);
-        setNodeProp(node, tier);
-    }
-
-    public void _hostRefresh(CommandInterpreter ci) {
-        String mode = ci.nextArgument();
-        if (mode == null) {
-            ci.println("expecting on/off/?");
-            return;
-        }
-        if (mode.toLowerCase().equals("on")) {
-            hostRefresh = true;
-        } else if (mode.toLowerCase().equals("off")) {
-            hostRefresh = false;
-        } else if (mode.equals("?")) {
-            if (hostRefresh) {
-                ci.println("host refresh is ON");
-            } else {
-                ci.println("host refresh is OFF");
-            }
-        } else {
-            ci.println("expecting on/off/?");
-        }
-        return;
-    }
-
-    public void _hostRetry(CommandInterpreter ci) {
-        String retry = ci.nextArgument();
-        if (retry == null) {
-            ci.println("Please enter a valid number. Current retry count is "
-                    + hostRetryCount);
-            return;
-        }
-        try {
-            hostRetryCount = Integer.parseInt(retry);
-        } catch (Exception e) {
-            ci.println("Please enter a valid number");
-        }
-        return;
-    }
-
     @Override
     public byte[] getNodeMAC(Node node) {
         MacAddress mac = (MacAddress) this.getNodeProp(node,
@@ -2040,9 +2047,9 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
         // only add if span is configured on this nodeConnector
         for (SpanConfig conf : getSpanConfigList(nodeConnector.getNode())) {
             if (conf.getPortArrayList().contains(nodeConnector)) {
-                List<NodeConnector> ncLists = new ArrayList<NodeConnector>();
-                ncLists.add(nodeConnector);
-                addSpanPorts(nodeConnector.getNode(), ncLists);
+                List<NodeConnector> ncList = new ArrayList<NodeConnector>();
+                ncList.add(nodeConnector);
+                addSpanPorts(nodeConnector.getNode(), ncList);
                 return;
             }
         }
@@ -2093,8 +2100,9 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
     }
 
     /**
-     * Creates a Name/Tier/Bandwidth Property object based on given property
-     * name and value. Other property types are not supported yet.
+     * Creates a Name/Tier/Bandwidth/MacAddress(controller property) Property
+     * object based on given property name and value. Other property types are
+     * not supported yet.
      *
      * @param propName
      *            Name of the Property
@@ -2125,7 +2133,10 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
             } else if (propName.equalsIgnoreCase(ForwardingMode.name)) {
                 int mode = Integer.parseInt(propValue);
                 return new ForwardingMode(mode);
-            } else {
+            } else if (propName.equalsIgnoreCase(MacAddress.name)){
+                return new MacAddress(propValue);
+            }
+            else {
                 log.debug("Not able to create {} property", propName);
             }
         } catch (Exception e) {
@@ -2134,6 +2145,7 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
 
         return null;
     }
+
 
     @SuppressWarnings("deprecation")
     @Override
@@ -2153,4 +2165,23 @@ public class SwitchManager implements ISwitchManager, IConfigurationContainerAwa
         return (desc == null /* || desc.getValue().equalsIgnoreCase("none") */) ? ""
                 : desc.getValue();
     }
+
+    @Override
+    public Set<Switch> getConfiguredNotConnectedSwitches() {
+        Set<Switch> configuredNotConnectedSwitches = new HashSet<Switch>();
+        if (this.inventoryService == null) {
+            log.trace("inventory service not available");
+            return configuredNotConnectedSwitches;
+        }
+
+        Set<Node> configuredNotConnectedNodes = this.inventoryService.getConfiguredNotConnectedNodes();
+        if (configuredNotConnectedNodes != null) {
+            for (Node node : configuredNotConnectedNodes) {
+                Switch sw = getSwitchByNode(node);
+                configuredNotConnectedSwitches.add(sw);
+            }
+        }
+        return configuredNotConnectedSwitches;
+    }
+
 }

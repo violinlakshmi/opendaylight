@@ -67,6 +67,13 @@ public interface ISwitchManager {
     public List<Switch> getNetworkDevices();
 
     /**
+     * Return a Set of all configured devices that are not connected to the controller
+     *
+     * @return Set of {@link org.opendaylight.controller.switchmanager.Switch}
+     */
+    public Set<Switch> getConfiguredNotConnectedSwitches();
+
+    /**
      * Return a list of subnet that were previously configured
      *
      * @return list of L3 interface {@link org.opendaylight.controller.switchmanager.SubnetConfig} configurations
@@ -336,6 +343,14 @@ public interface ISwitchManager {
     public Boolean isNodeConnectorEnabled(NodeConnector nodeConnector);
 
     /**
+     * Test whether the given node connector exists.
+     *
+     * @param nc  {@link org.opendaylight.controller.sal.core.NodeConnector}
+     * @return    True if exists, false otherwise.
+     */
+    public boolean doesNodeConnectorExist(NodeConnector nc);
+
+    /**
      * Return controller MAC address
          *
      * @return MAC address in byte array
@@ -351,29 +366,19 @@ public interface ISwitchManager {
     public byte[] getNodeMAC(Node node);
 
     /**
-     * Return true if the host Refresh procedure (by sending ARP request probes
-     * to known hosts) is enabled. By default, the procedure is enabled. This can
-     * be overwritten by OSFI CLI "hostRefresh off".
+     * Create a Name/Tier/Bandwidth Property object based on given property name
+     * and value. Other property types are not supported yet.
      *
-     * @return true if it is enabled; false if it's disabled.
+     * @param propName
+     *            Name of the Property specified by
+     *            {@link org.opendaylight.controller.sal.core.Property} and its
+     *            extended classes
+     * @param propValue
+     *            Value of the Property specified by
+     *            {@link org.opendaylight.controller.sal.core.Property} and its
+     *            extended classes
+     * @return {@link org.opendaylight.controller.sal.core.Property}
      */
-    public boolean isHostRefreshEnabled();
-
-    /**
-     * Return host refresh retry count
-     *
-     * @return host refresh retry count
-     */
-    public int getHostRetryCount();
-
-        /**
-         * Create a Name/Tier/Bandwidth Property object based on given property
-         * name and value. Other property types are not supported yet.
-         *
-     * @param propName Name of the Property specified by {@link org.opendaylight.controller.sal.core.Property} and its extended classes
-     * @param propValue Value of the Property specified by {@link org.opendaylight.controller.sal.core.Property} and its extended classes
-         * @return {@link org.opendaylight.controller.sal.core.Property}
-         */
     public Property createProperty(String propName, String propValue);
 
     /**
@@ -387,4 +392,44 @@ public interface ISwitchManager {
      */
     @Deprecated
     public String getNodeDescription(Node node);
+
+    /**
+     * Return all the properties of the controller
+     *
+     * @return map of {@link org.opendaylight.controller.sal.core.Property} such
+     *         as {@link org.opendaylight.controller.sal.core.Description}
+     *         and/or {@link org.opendaylight.controller.sal.core.Tier} etc.
+     */
+    public Map<String, Property> getControllerProperties();
+
+    /**
+     * Return a specific property of the controller given the property name
+     *
+     * @param propName
+     *            the property name specified by
+     *            {@link org.opendaylight.controller.sal.core.Property} and its
+     *            extended classes
+     * @return {@link org.opendaylight.controller.sal.core.Property}
+     */
+    public Property getControllerProperty(String propertyName);
+
+    /**
+     * Set a specific property of the controller
+     *
+     * @param property
+     *            {@link org.opendaylight.controller.sal.core.Property}
+     * @return
+     */
+    public Status setControllerProperty(Property property);
+
+    /**
+     * Remove a property of a node
+     *
+     * @param propertyName
+     *            the property name specified by
+     *            {@link org.opendaylight.controller.sal.core.Property} and its
+     *            extended classes
+     * @return success or failed reason
+     */
+    public Status removeControllerProperty(String propertyName);
 }

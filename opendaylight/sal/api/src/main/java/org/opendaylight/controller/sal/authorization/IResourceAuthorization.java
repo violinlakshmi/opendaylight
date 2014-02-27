@@ -27,8 +27,8 @@ public interface IResourceAuthorization {
      *
      * @param role  the role name
      * @param userLevel the user level in the application context
-         * @return the status of the request
-         */
+     * @return the status of the request
+     */
     public Status createRole(String role, AppRoleLevel userLevel);
 
     /**
@@ -68,10 +68,15 @@ public interface IResourceAuthorization {
     public boolean isApplicationRole(String roleName);
 
     /**
-     * Create a resource group for application
+     * Create a resource group for application.
      *
-     * @param groupName the name for the resource group
-     * @param resources the list of resources for the group
+     * NOTE: Resource addition is "best effort", if an object is not of correct type,
+     * it is discarded.
+     *
+     * @param groupName
+     *            the name for the resource group
+     * @param resources
+     *            the list of resources for the group
      * @return the status of the request
      */
     public Status createResourceGroup(String groupName, List<Object> resources);
@@ -187,4 +192,37 @@ public interface IResourceAuthorization {
      */
     public Privilege getResourcePrivilege(String userName, Object resource);
 
+    /**
+     * Add a resource to a group
+     *
+     * @param groupName
+     *            the resource group
+     * @param resource
+     *            the resource object
+     * @return the status of the request
+     */
+    public Status addResourceToGroup(String groupName, Object resource);
+
+    /**
+     * Remove a resource from a group
+     *
+     * @param groupName
+     *            the resource group
+     * @param resource
+     *            the resource object
+     * @return the status of the request
+     */
+    public Status removeResourceFromGroup(String groupName, Object resource);
+
+    /**
+     * Return whether the specified user has access to this application. In
+     * other words if the user is associated any roles belonging to this
+     * application.
+     *
+     * @param userName
+     *            the user name
+     * @return true if the user has access to this application's resources,
+     *         false otherwise
+     */
+    boolean isApplicationUser(String userName);
 }

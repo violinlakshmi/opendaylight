@@ -14,9 +14,7 @@ import java.util.List;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
 import org.opendaylight.controller.sal.authorization.UserLevel;
-import org.opendaylight.controller.usermanager.AuthenticatedUser;
 import org.springframework.security.core.GrantedAuthority;
 
 public class AuthenticatedUserTest {
@@ -35,7 +33,7 @@ public class AuthenticatedUserTest {
                 user = new AuthenticatedUser("auser");
 
                 Assert.assertFalse(user.getAccessDate().isEmpty());
-                Assert.assertNull(user.getUserRoles());
+        Assert.assertNotNull(user.getUserRoles());
         }
 
         @Test
@@ -64,6 +62,7 @@ public class AuthenticatedUserTest {
 
         @Test
         public void testGetGrantedAuthorities() {
+                user = new AuthenticatedUser("auser");
                 List<GrantedAuthority> gaList = user
                                 .getGrantedAuthorities(UserLevel.NETWORKOPERATOR);
                 Assert.assertTrue(gaList.get(0).getAuthority()

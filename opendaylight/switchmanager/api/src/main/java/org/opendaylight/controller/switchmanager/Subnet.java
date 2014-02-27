@@ -25,6 +25,7 @@ public class Subnet implements Cloneable, Serializable {
     private static final long serialVersionUID = 1L;
     // Key fields
     private InetAddress networkAddress;
+    private transient InetAddress subnetPrefix;
     private short subnetMaskLength;
     // Property fields
     private short vlan;
@@ -114,6 +115,7 @@ public class Subnet implements Cloneable, Serializable {
      */
     public Subnet setNetworkAddress(InetAddress networkAddress) {
         this.networkAddress = networkAddress;
+        this.subnetPrefix = null;
         return this;
     }
 
@@ -159,17 +161,15 @@ public class Subnet implements Cloneable, Serializable {
         if (ip == null) {
             return false;
         }
-        InetAddress thisPrefix = getPrefixForAddress(this.networkAddress);
+        if(subnetPrefix == null) {
+            subnetPrefix = getPrefixForAddress(this.networkAddress);
+        }
         InetAddress otherPrefix = getPrefixForAddress(ip);
-        if ((thisPrefix == null) || (otherPrefix == null)) {
-            return false;
+        boolean isSubnetOf = true;
+        if (((subnetPrefix == null) || (otherPrefix == null)) || (!subnetPrefix.equals(otherPrefix)) ) {
+            isSubnetOf = false;
         }
-        if (thisPrefix.equals(otherPrefix)) {
-            return true;
-        }
-        else {
-            return false;
-        }
+        return isSubnetOf;
     }
 
     public short getVlan() {
@@ -244,24 +244,11 @@ public class Subnet implements Cloneable, Serializable {
         if (p == null) {
             return false;
         }
-        if (this.isFlatLayer2()) {
-            return true;
-        }
-        return this.nodeConnectors.contains(p);
+        return isFlatLayer2() || nodeConnectors.contains(p);
     }
 
     public boolean isMutualExclusive(Subnet otherSubnet) {
-        if (this.networkAddress.getClass() != otherSubnet.networkAddress
-                .getClass()) {
-            return true;
-        }
-        if (this.isSubnetOf(otherSubnet.getNetworkAddress())) {
-            return false;
-        }
-        if (otherSubnet.isSubnetOf(this.getNetworkAddress())) {
-            return false;
-        }
-        return true;
+        return !(isSubnetOf(otherSubnet.getNetworkAddress()) || otherSubnet.isSubnetOf(getNetworkAddress()));
     }
 
     /**

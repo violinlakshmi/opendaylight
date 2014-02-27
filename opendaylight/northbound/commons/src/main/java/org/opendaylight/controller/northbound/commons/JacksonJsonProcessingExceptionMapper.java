@@ -11,18 +11,18 @@ package org.opendaylight.controller.northbound.commons;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.core.GenericEntity;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.Produces;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 
-import org.codehaus.jackson.JsonProcessingException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+
 
 /**
  * A custom exception mapper for handling Jackson JsonProcessingException types
  */
 @Provider
-@Consumes({MediaType.APPLICATION_JSON, "text/json"})
+@Consumes({MediaType.APPLICATION_JSON})
 public class JacksonJsonProcessingExceptionMapper
     implements ExceptionMapper<JsonProcessingException>
 {
