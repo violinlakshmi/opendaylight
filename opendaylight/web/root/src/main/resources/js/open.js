@@ -99,8 +99,7 @@ one.main.page = {
     $('.dashlet', '#main').empty();
     $('.nav', '#main').empty();
     // fetch page's js
-    $.getScript(one.main.constants.address.prefix+"/"+page+"/js/page.js")
-    .success(function() {
+    $.getScript(one.main.constants.address.prefix + "/" + page + "/js/page.js").success(function() {
       one.main.menu.registry.load = false;
     });
 
@@ -792,6 +791,3 @@ $.ajaxSetup({
     }
   }
 });
-
-/** MAIN PAGE LOAD */
-//one.main.menu.load();
