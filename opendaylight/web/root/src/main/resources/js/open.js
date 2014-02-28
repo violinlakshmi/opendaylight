@@ -100,9 +100,9 @@ one.main.page = {
     $('.nav', '#main').empty();
     // fetch page's js
     $.getScript(one.main.constants.address.prefix+"/"+page+"/js/page.js")
-      .success(function() {
-        one.main.menu.registry.load = false;
-      });
+    .success(function() {
+      one.main.menu.registry.load = false;
+    });
 
     $.ajaxSetup({
       data : {
@@ -794,4 +794,4 @@ $.ajaxSetup({
 });
 
 /** MAIN PAGE LOAD */
-one.main.menu.load();
+//one.main.menu.load();

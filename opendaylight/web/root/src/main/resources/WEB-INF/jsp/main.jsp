@@ -36,13 +36,16 @@
 %>
 
 <title>${name}</title>
+
+<script data-main="/js/main" src="/js/require.js"></script>
+
 <!-- jQuery - 1 -->
 <script src="/js/jquery-1.9.1.min.js"></script>
 
 <!-- Bootstrap JS - 2 -->
-<script src="/js/underscore-min.js"></script>
+<!-- <script src="/js/underscore-min.js"></script>
 <script src="/js/fuelux/loader.min.js"></script>
-<script src="/js/datasource.js"></script>
+<script src="/js/datasource.js"></script> -->
 
 <!-- LESS - 3 -->
 <script type="text/javascript">
@@ -50,7 +53,7 @@
         env : "production"
     };
 </script>
-<script src="/js/less-1.3.3.min.js"></script>
+<!-- <script src="/js/less-1.3.3.min.js"></script> -->
 
 <!-- Topology - 4 -->
 <script src="/js/jit.js"></script>
@@ -185,7 +188,7 @@
      } else {
  %>
  <!-- Core JS - 7 -->
- <script src="/js/open.js"></script>
+ <!-- <script src="/js/open.js"></script> -->
 
  <!-- Topology JS - 8 -->
  <script src="/js/open-topology.js"></script>

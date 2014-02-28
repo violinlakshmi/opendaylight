@@ -7,6 +7,16 @@
  */
 
 //PAGE Devices
+requirejs.config({
+    paths: {
+        jquery: 'jquery-1.9.1.min',
+        less: 'less-1.3.3.min',
+        underscore: 'underscore-min',
+        fuelux: 'fuelux/'
+    }
+});
+require(['datasource', 'underscore', 'fuelux/loader.min'], function(StaticDataSource) {
+
 one.f = {};
 
 // specify dashlets and layouts
@@ -1812,3 +1822,7 @@ $('.dash .nav a', '#main').click(function() {
 $('.dash .nav').each(function(index, value) {
   $($(value).find('li')[0]).find('a').click();
 });
+
+
+
+}); // require function ends
