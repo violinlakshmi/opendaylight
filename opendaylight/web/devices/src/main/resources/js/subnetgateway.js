@@ -1,7 +1,7 @@
-define(['datasource'], function(StaticDataSource) {
-
-// Subnetgateway code goes here.
-    var module_subnetGatewayConfig = {
+define(
+    [ 'datasource' ],
+    function(StaticDataSource) {
+      var subnetGateway = {
         id : {
           dashlet : {
             addIPAddress : "one_f_switchmanager_subnetGatewayConfig_id_dashlet_addIP",
@@ -30,90 +30,80 @@ define(['datasource'], function(StaticDataSource) {
           $dashlet.append(one.lib.dashlet.header(one.f.dashlet.subnetGatewayConfig.name));
           // Add gateway IP Address button
           var url = one.f.switchmanager.rootUrl + "/subnets";
-          one.f.switchmanager.subnetGatewayConfig.ajax.main(url, {},
-              function(content) {
+          one.f.switchmanager.subnetGatewayConfig.ajax.main(url, {}, function(content) {
 
-                if (content.privilege === 'WRITE') {
-                  var button = one.lib.dashlet.button.single("Add Gateway IP Address",
-                      one.f.switchmanager.subnetGatewayConfig.id.dashlet.addIPAddress, "btn-primary",
-                      "btn-mini");
-                  var $button = one.lib.dashlet.button.button(button);
-                  $button.click(function() {
-                    var $modal = one.f.switchmanager.subnetGatewayConfig.modal.initialize.gateway();
-                    $modal.modal();
-                  });
-                  $dashlet.append($button);
-
-                  // Delete gateway ip address button
-                  var button = one.lib.dashlet.button.single("Remove Gateway IP Address",
-                      one.f.switchmanager.subnetGatewayConfig.id.dashlet.removeIPAddress, "btn-danger",
-                      "btn-mini");
-                  var $button = one.lib.dashlet.button.button(button);
-                  $button.click(function() {
-                    var gatewaysToDelete = [];
-                    var checkedCheckBoxes = $(
-                        "#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.datagrid).find(
-                        "tbody input:checked")
-                    checkedCheckBoxes.each(function(index, value) {
-                      gatewaysToDelete.push(checkedCheckBoxes[index].id);
-                    });
-                    if (checkedCheckBoxes.size() === 0) {
-                      return false;
-                    }
-                    one.f.switchmanager.subnetGatewayConfig.modal.removeMultiple.dialog(gatewaysToDelete)
-                  });
-                  $dashlet.append($button);
-
-                  // Add Ports button
-                  var button = one.lib.dashlet.button.single("Add Ports",
-                      one.f.switchmanager.subnetGatewayConfig.id.dashlet.addPorts, "btn-primary",
-                      "btn-mini");
-                  var $button = one.lib.dashlet.button.button(button);
-                  $button.click(function() {
-                    if (one.f.switchmanager.subnetGatewayConfig.registry.gateways.length === 0) {
-                      alert('No Gateways Exist');
-                      return false;
-                    }
-                    var $modal = one.f.switchmanager.subnetGatewayConfig.modal.initialize.ports();
-                    $modal.modal();
-                  });
-                  $dashlet.append($button);
-                }
-                var $gridHTML = one.lib.dashlet.datagrid.init(
-                    one.f.switchmanager.subnetGatewayConfig.id.dashlet.datagrid, {
-                      searchable : true,
-                      filterable : false,
-                      pagination : true,
-                      flexibleRowsPerPage : true
-                    }, "table-striped table-condensed");
-                $dashlet.append($gridHTML);
-                var dataSource = one.f.switchmanager.subnetGatewayConfig.data.devicesgrid(content);
-                $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.datagrid).datagrid({
-                  dataSource : dataSource
-                }).on(
-                    "loaded",
-                    function() {
-                      $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.selectAll).click(
-                          function() {
-                            $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.datagrid).find(
-                                ':checkbox').prop(
-                                'checked',
-                                $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.selectAll).is(
-                                    ':checked'));
-                          });
-                      $(".subnetGatewayConfig").click(
-                          function(e) {
-                            if (!$('.subnetGatewayConfig[type=checkbox]:not(:checked)').length) {
-                              $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.selectAll).prop(
-                                  "checked", true);
-                            } else {
-                              $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.selectAll).prop(
-                                  "checked", false);
-                            }
-                            e.stopPropagation();
-                          });
-                    });
+            if (content.privilege === 'WRITE') {
+              var button = one.lib.dashlet.button.single("Add Gateway IP Address",
+                  one.f.switchmanager.subnetGatewayConfig.id.dashlet.addIPAddress, "btn-primary", "btn-mini");
+              var $button = one.lib.dashlet.button.button(button);
+              $button.click(function() {
+                var $modal = one.f.switchmanager.subnetGatewayConfig.modal.initialize.gateway();
+                $modal.modal();
               });
+              $dashlet.append($button);
+
+              // Delete gateway ip address button
+              var button = one.lib.dashlet.button.single("Remove Gateway IP Address",
+                  one.f.switchmanager.subnetGatewayConfig.id.dashlet.removeIPAddress, "btn-danger", "btn-mini");
+              var $button = one.lib.dashlet.button.button(button);
+              $button.click(function() {
+                var gatewaysToDelete = [];
+                var checkedCheckBoxes = $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.datagrid).find(
+                    "tbody input:checked")
+                checkedCheckBoxes.each(function(index, value) {
+                  gatewaysToDelete.push(checkedCheckBoxes[index].id);
+                });
+                if (checkedCheckBoxes.size() === 0) {
+                  return false;
+                }
+                one.f.switchmanager.subnetGatewayConfig.modal.removeMultiple.dialog(gatewaysToDelete)
+              });
+              $dashlet.append($button);
+
+              // Add Ports button
+              var button = one.lib.dashlet.button.single("Add Ports",
+                  one.f.switchmanager.subnetGatewayConfig.id.dashlet.addPorts, "btn-primary", "btn-mini");
+              var $button = one.lib.dashlet.button.button(button);
+              $button.click(function() {
+                if (one.f.switchmanager.subnetGatewayConfig.registry.gateways.length === 0) {
+                  alert('No Gateways Exist');
+                  return false;
+                }
+                var $modal = one.f.switchmanager.subnetGatewayConfig.modal.initialize.ports();
+                $modal.modal();
+              });
+              $dashlet.append($button);
+            }
+            var $gridHTML = one.lib.dashlet.datagrid.init(one.f.switchmanager.subnetGatewayConfig.id.dashlet.datagrid,
+                {
+                  searchable : true,
+                  filterable : false,
+                  pagination : true,
+                  flexibleRowsPerPage : true
+                }, "table-striped table-condensed");
+            $dashlet.append($gridHTML);
+            var dataSource = one.f.switchmanager.subnetGatewayConfig.data.devicesgrid(content);
+            $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.datagrid).datagrid({
+              dataSource : dataSource
+            }).on(
+                "loaded",
+                function() {
+                  $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.selectAll).click(
+                      function() {
+                        $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.datagrid).find(':checkbox').prop(
+                            'checked',
+                            $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.selectAll).is(':checked'));
+                      });
+                  $(".subnetGatewayConfig").click(function(e) {
+                    if (!$('.subnetGatewayConfig[type=checkbox]:not(:checked)').length) {
+                      $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.selectAll).prop("checked", true);
+                    } else {
+                      $("#" + one.f.switchmanager.subnetGatewayConfig.id.dashlet.selectAll).prop("checked", false);
+                    }
+                    e.stopPropagation();
+                  });
+                });
+          });
         },
         ajax : {
           main : function(url, requestData, callback) {
@@ -128,8 +118,7 @@ define(['datasource'], function(StaticDataSource) {
             gateway : function() {
               var h3 = "Add Gateway IP Address";
               var footer = one.f.switchmanager.subnetGatewayConfig.modal.footer();
-              var $modal = one.lib.modal.spawn(one.f.switchmanager.subnetGatewayConfig.id.modal.modal,
-                  h3, "", footer);
+              var $modal = one.lib.modal.spawn(one.f.switchmanager.subnetGatewayConfig.id.modal.modal, h3, "", footer);
               // bind save button
               $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.save, $modal).click(function() {
                 one.f.switchmanager.subnetGatewayConfig.modal.save.gateway($modal);
@@ -141,8 +130,7 @@ define(['datasource'], function(StaticDataSource) {
             ports : function() {
               var h3 = "Add Ports";
               var footer = one.f.switchmanager.subnetGatewayConfig.modal.footer();
-              var $modal = one.lib.modal.spawn(one.f.switchmanager.subnetGatewayConfig.id.modal.ports,
-                  h3, "", footer);
+              var $modal = one.lib.modal.spawn(one.f.switchmanager.subnetGatewayConfig.id.modal.ports, h3, "", footer);
               // bind save button
               $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.save, $modal).click(function() {
                 one.f.switchmanager.subnetGatewayConfig.modal.save.ports($modal);
@@ -159,15 +147,13 @@ define(['datasource'], function(StaticDataSource) {
           save : {
             gateway : function($modal) {
               var result = {};
-              result['gatewayName'] = $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.name,
-                  $modal).val();
+              result['gatewayName'] = $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.name, $modal).val();
               if (!one.f.switchmanager.validateName(result['gatewayName'])) {
                 alert("Gateway name can contain upto 255 characters");
                 return;
               }
               result['gatewayIPAddress'] = $(
-                  '#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.gatewayIPAddress, $modal)
-                  .val();
+                  '#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.gatewayIPAddress, $modal).val();
               one.f.switchmanager.subnetGatewayConfig.modal.ajax.gateway(result, function(response) {
                 if (response.status == true) {
                   $modal.modal('hide');
@@ -179,13 +165,11 @@ define(['datasource'], function(StaticDataSource) {
             },
             ports : function($modal) {
               var result = {};
-              var gatewayRegistryIndex = $(
-                  '#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.name, $modal).val();
+              var gatewayRegistryIndex = $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.name, $modal)
+                  .val();
               result['portsName'] = one.f.switchmanager.subnetGatewayConfig.registry.gateways[gatewayRegistryIndex];
-              result['nodeId'] = $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.nodeId,
-                  $modal).val();
-              result['ports'] = $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.ports,
-                  $modal).val();
+              result['nodeId'] = $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.nodeId, $modal).val();
+              result['ports'] = $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.form.ports, $modal).val();
               if (!result['portsName'] || result['portsName'] == "") {
                 alert("No gateway chosen. Cannot add port");
                 return;
@@ -232,8 +216,7 @@ define(['datasource'], function(StaticDataSource) {
               var $fieldset = $(document.createElement('fieldset'));
               // gateways drop down
               var $label = one.lib.form.label("Gateway Name");
-              var $select = one.lib.form.select
-                  .create(one.f.switchmanager.subnetGatewayConfig.registry.gateways);
+              var $select = one.lib.form.select.create(one.f.switchmanager.subnetGatewayConfig.registry.gateways);
               $select.attr('id', one.f.switchmanager.subnetGatewayConfig.id.modal.form.name);
               one.lib.form.select.prepend($select, {
                 '' : 'Please Select a Gateway'
@@ -289,8 +272,7 @@ define(['datasource'], function(StaticDataSource) {
               });
             },
             ports : function(requestData, callback) {
-              $.getJSON(one.f.switchmanager.rootUrl + "/subnetGateway/ports/add", requestData, function(
-                  data) {
+              $.getJSON(one.f.switchmanager.rootUrl + "/subnetGateway/ports/add", requestData, function(data) {
                 callback(data);
               });
             }
@@ -308,10 +290,9 @@ define(['datasource'], function(StaticDataSource) {
               var h3 = 'Remove Gateway IP Address';
 
               var footer = one.f.switchmanager.subnetGatewayConfig.modal.removeMultiple.footer();
-              var $body = one.f.switchmanager.subnetGatewayConfig.modal.removeMultiple
-                  .body(gatewaysToDelete);
-              var $modal = one.lib.modal.spawn(one.f.switchmanager.subnetGatewayConfig.id.modal.modal,
-                  h3, $body, footer);
+              var $body = one.f.switchmanager.subnetGatewayConfig.modal.removeMultiple.body(gatewaysToDelete);
+              var $modal = one.lib.modal.spawn(one.f.switchmanager.subnetGatewayConfig.id.modal.modal, h3, $body,
+                  footer);
 
               // bind close button
               $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.cancel, $modal).click(function() {
@@ -319,26 +300,23 @@ define(['datasource'], function(StaticDataSource) {
               });
 
               // bind remove rule button
-              $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.remove, $modal).click(
-                  this,
-                  function(e) {
-                    var requestData = {};
-                    if (gatewaysToDelete.length > 0) {
-                      requestData["gatewaysToDelete"] = gatewaysToDelete.toString();
-                      var url = one.f.switchmanager.rootUrl + "/subnetGateway/delete";
-                      one.f.switchmanager.subnetGatewayConfig.ajax.main(url, requestData, function(
-                          response) {
-                        $modal.modal('hide');
-                        if (response.status == true) {
-                          // refresh dashlet by passing dashlet div as param
-                          one.lib.alert("Gateway IP Address(es) successfully removed");
-                        } else {
-                          alert(response.message);
-                        }
-                        one.f.switchmanager.subnetGatewayConfig.dashlet($("#right-bottom .dashlet"));
-                      });
+              $('#' + one.f.switchmanager.subnetGatewayConfig.id.modal.remove, $modal).click(this, function(e) {
+                var requestData = {};
+                if (gatewaysToDelete.length > 0) {
+                  requestData["gatewaysToDelete"] = gatewaysToDelete.toString();
+                  var url = one.f.switchmanager.rootUrl + "/subnetGateway/delete";
+                  one.f.switchmanager.subnetGatewayConfig.ajax.main(url, requestData, function(response) {
+                    $modal.modal('hide');
+                    if (response.status == true) {
+                      // refresh dashlet by passing dashlet div as param
+                      one.lib.alert("Gateway IP Address(es) successfully removed");
+                    } else {
+                      alert(response.message);
                     }
+                    one.f.switchmanager.subnetGatewayConfig.dashlet($("#right-bottom .dashlet"));
                   });
+                }
+              });
               $modal.modal();
             },
             footer : function() {
@@ -409,8 +387,7 @@ define(['datasource'], function(StaticDataSource) {
                                   .each(
                                       nodePorts,
                                       function(index, nodePort) {
-                                        nodePortHtml += nodePort["nodePortName"] + " @ "
-                                            + nodePort["nodeName"];
+                                        nodePortHtml += nodePort["nodePortName"] + " @ " + nodePort["nodeName"];
                                         nodePortHtml += "&nbsp;";
                                         nodePortHtml += '<a href="#" id="'
                                             + encodeURIComponent(nodePort["nodePortId"])
@@ -510,6 +487,5 @@ define(['datasource'], function(StaticDataSource) {
           }
         }
       }
-      return module_subnetGatewayConfig;
-
-});  // end define
+      return subnetGateway;
+    }); // end define

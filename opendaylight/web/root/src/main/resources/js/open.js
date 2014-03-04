@@ -79,7 +79,7 @@ one.main.menu = {
           var name = value['name'];
           var entry = {
             'name' : name,
-        'id' : key
+            'id' : key
           };
           result[order] = entry;
         }
@@ -142,7 +142,7 @@ one.main.admin = {
         password : 'one_main_admin_id_modal_remove_password'
       },
       modify : {
-          user : "one_main_admin_id_modal_modify_user",
+        user : "one_main_admin_id_modal_modify_user",
       },
       password : {
         modal : 'one_main_admin_id_modal_password_modal',
@@ -159,7 +159,7 @@ one.main.admin = {
       user : "one_main_admin_id_add_user"
     }
   },
-  registry :{
+  registry : {
 
   },
   address : {
@@ -172,8 +172,7 @@ one.main.admin = {
     initialize : function(callback) {
       var h3 = "Welcome " + $('#admin').text();
       var footer = one.main.admin.modal.footer();
-      var $modal = one.lib.modal.spawn(one.main.admin.id.modal.main, h3,
-          '', footer);
+      var $modal = one.lib.modal.spawn(one.main.admin.id.modal.main, h3, '', footer);
 
       // close binding
       $('#' + one.main.admin.id.modal.close, $modal).click(function() {
@@ -190,7 +189,8 @@ one.main.admin = {
     },
     footer : function() {
       var footer = [];
-      var closeButton = one.lib.dashlet.button.single('Close', one.main.admin.id.modal.close, '', '');
+      var closeButton = one.lib.dashlet.button.single('Close', one.main.admin.id.modal.close, '',
+          '');
       var $closeButton = one.lib.dashlet.button.button(closeButton);
       footer.push($closeButton);
       return footer;
@@ -198,13 +198,12 @@ one.main.admin = {
   },
   ajax : {
     users : function(callback) {
-      $.getJSON(one.main.admin.address.root
-          + one.main.admin.address.users, function(data) {
-            var body = one.main.admin.data.users(data);
-            one.main.admin.registry["users"] = data;
-            var $body = one.main.admin.body.users(body);
-            callback($body);
-          });
+      $.getJSON(one.main.admin.address.root + one.main.admin.address.users, function(data) {
+        var body = one.main.admin.data.users(data);
+        one.main.admin.registry["users"] = data;
+        var $body = one.main.admin.body.users(body);
+        callback($body);
+      });
     }
   },
   data : {
@@ -227,8 +226,7 @@ one.main.admin = {
       var $div = $(document.createElement('div'));
       var $h5 = $(document.createElement('h5'));
       $h5.append("Manage Users");
-      var attributes = [ "table-striped", "table-bordered",
-          "table-hover", "table-cursor" ];
+      var attributes = [ "table-striped", "table-bordered", "table-hover", "table-cursor" ];
       var $table = one.lib.dashlet.table.table(attributes);
       var headers = [ "User", "Role" ];
       var $thead = one.lib.dashlet.table.header(headers);
@@ -247,10 +245,9 @@ one.main.admin = {
       $div.append($h5).append($table);
 
       if (one.role < 2) {
-        var addUserButton = one.lib.dashlet.button.single("Add User",
-            one.main.admin.id.add.user, "btn-primary", "btn-mini");
-        var $addUserButton = one.lib.dashlet.button
-          .button(addUserButton);
+        var addUserButton = one.lib.dashlet.button.single("Add User", one.main.admin.id.add.user,
+            "btn-primary", "btn-mini");
+        var $addUserButton = one.lib.dashlet.button.button(addUserButton);
         $div.append($addUserButton);
 
         // add user binding
@@ -268,14 +265,13 @@ one.main.admin = {
         var h3 = "Manage user - " + id;
         var footer = one.main.admin.remove.footer();
         var $body = one.main.admin.remove.body();
-        var $modal = one.lib.modal.spawn(one.main.admin.id.modal.user,
-            h3, $body, footer);
+        var $modal = one.lib.modal.spawn(one.main.admin.id.modal.user, h3, $body, footer);
         // close binding
-        $('#'+one.main.admin.id.modal.remove.close, $modal).click(function() {
+        $('#' + one.main.admin.id.modal.remove.close, $modal).click(function() {
           $modal.modal('hide');
         });
         // close binding
-        $('#'+one.main.admin.id.modal.modify.user, $modal).click(function() {
+        $('#' + one.main.admin.id.modal.modify.user, $modal).click(function() {
           one.main.admin.add.modal.initialize(id, true);
         });
         // remove binding
@@ -284,7 +280,7 @@ one.main.admin = {
             if (result.description == 'Success') {
               $modal.modal('hide');
               // body inject
-              var $admin = $('#'+one.main.admin.id.modal.main);
+              var $admin = $('#' + one.main.admin.id.modal.main);
               one.main.admin.ajax.users(function($body) {
                 one.lib.modal.inject.body($admin, $body);
               });
@@ -302,9 +298,10 @@ one.main.admin = {
         $modal.modal();
       },
       ajax : function(id, callback) {
-        $.post(one.main.admin.address.root + one.main.admin.address.users + '/' + id, function(data) {
-          callback(data);
-        });
+        $.post(one.main.admin.address.root + one.main.admin.address.users + '/' + id,
+            function(data) {
+              callback(data);
+            });
       },
     },
     footer : function() {
@@ -314,7 +311,7 @@ one.main.admin = {
       var $removeButton = one.lib.dashlet.button.button(removeButton);
       footer.push($removeButton);
       var modifyButton = one.lib.dashlet.button.single("Change Role",
-              one.main.admin.id.modal.modify.user, "btn-success", "");
+          one.main.admin.id.modal.modify.user, "btn-success", "");
       var $modifyButton = one.lib.dashlet.button.button(modifyButton);
       footer.push($modifyButton);
       var change = one.lib.dashlet.button.single('Change Password',
@@ -336,11 +333,10 @@ one.main.admin = {
   add : {
     modal : {
       initialize : function(id, edit) {
-        var h3 = edit? "Change Role of user " + id:"Add User";
+        var h3 = edit ? "Change Role of user " + id : "Add User";
         var footer = one.main.admin.add.footer(edit);
         var $body = one.main.admin.add.body(id, edit);
-        var $modal = one.lib.modal.spawn(one.main.admin.id.modal.user,
-            h3, $body, footer);
+        var $modal = one.lib.modal.spawn(one.main.admin.id.modal.user, h3, $body, footer);
         // close binding
         $('#' + one.main.admin.id.modal.add.close, $modal).click(function() {
           $modal.modal('hide');
@@ -351,13 +347,13 @@ one.main.admin = {
             if (result.description == 'Success') {
               $modal.modal('hide');
               // body inject
-              var $admin = $('#'+one.main.admin.id.modal.main);
+              var $admin = $('#' + one.main.admin.id.modal.main);
               one.main.admin.ajax.users(function($body) {
-               one.lib.modal.inject.body($admin, $body);
+                one.lib.modal.inject.body($admin, $body);
               });
             } else {
-              var action = edit? "edit" :"add";
-              alert("Failed to "+ action +" user: "+result.description);
+              var action = edit ? "edit" : "add";
+              alert("Failed to " + action + " user: " + result.description);
             }
           });
         });
@@ -365,25 +361,22 @@ one.main.admin = {
       },
       add : function($modal, edit, callback) {
         var user = {};
-        user['user'] = $modal.find(
-            '#' + one.main.admin.id.modal.add.form.name).val();
+        user['user'] = $modal.find('#' + one.main.admin.id.modal.add.form.name).val();
         if (!edit) {
-            user['password'] = $modal.find(
-                '#' + one.main.admin.id.modal.add.form.password).val();
+          user['password'] = $modal.find('#' + one.main.admin.id.modal.add.form.password).val();
         }
         roles = new Array();
-        roles[0] = $modal.find(
-            '#' + one.main.admin.id.modal.add.form.role).find(
-              'option:selected').attr('value');
+        roles[0] = $modal.find('#' + one.main.admin.id.modal.add.form.role).find('option:selected')
+            .attr('value');
         user['roles'] = roles;
 
         if (!edit) {
-            // password check
-            var verify = $('#'+one.main.admin.id.modal.add.form.verify).val();
-            if (user.password != verify) {
-              alert('Passwords do not match');
-              return false;
-            }
+          // password check
+          var verify = $('#' + one.main.admin.id.modal.add.form.verify).val();
+          if (user.password != verify) {
+            alert('Passwords do not match');
+            return false;
+          }
         }
         var resource = {};
         resource['json'] = JSON.stringify(user);
@@ -392,17 +385,16 @@ one.main.admin = {
         one.main.admin.add.modal.ajax(resource, edit, callback);
       },
       ajax : function(data, edit, callback) {
-          if(edit) {
-            $.post(one.main.admin.address.root
-              + one.main.admin.address.modifyUser, data, function(data) {
-                callback(data);
-              });
-          } else {  
-            $.post(one.main.admin.address.root
-              + one.main.admin.address.users, data, function(data) {
-                callback(data);
-              });
-          }
+        if (edit) {
+          $.post(one.main.admin.address.root + one.main.admin.address.modifyUser, data, function(
+              data) {
+            callback(data);
+          });
+        } else {
+          $.post(one.main.admin.address.root + one.main.admin.address.users, data, function(data) {
+            callback(data);
+          });
+        }
       }
     },
     body : function(id, edit) {
@@ -410,9 +402,9 @@ one.main.admin = {
       var $fieldset = $(document.createElement('fieldset'));
       var users = one.main.admin.registry["users"];
       var currentUser;
-      if(edit) {
+      if (edit) {
         $(users).each(function(index, val) {
-             if(val.user == id){
+          if (val.user == id) {
             currentUser = val;
           }
         });
@@ -422,24 +414,24 @@ one.main.admin = {
       var $label = one.lib.form.label('Username');
       var $input = one.lib.form.input('Username');
       $input.attr('id', one.main.admin.id.modal.add.form.name);
-      if(edit) {
-         $input.attr("disabled",true);
-         $input.val(id);
+      if (edit) {
+        $input.attr("disabled", true);
+        $input.val(id);
       }
       $fieldset.append($label).append($input);
-      if(!edit) {
-          // password
-          var $label = one.lib.form.label('Password');
-          var $input = one.lib.form.input('Password');
-          $input.attr('id', one.main.admin.id.modal.add.form.password);
-          $input.attr('type', 'password');
-          $fieldset.append($label).append($input);
-          // password verify
-          var $label = one.lib.form.label('Verify Password');
-          var $input = one.lib.form.input('Verify Password');
-          $input.attr('id', one.main.admin.id.modal.add.form.verify);
-          $input.attr('type', 'password');
-          $fieldset.append($label).append($input);
+      if (!edit) {
+        // password
+        var $label = one.lib.form.label('Password');
+        var $input = one.lib.form.input('Password');
+        $input.attr('id', one.main.admin.id.modal.add.form.password);
+        $input.attr('type', 'password');
+        $fieldset.append($label).append($input);
+        // password verify
+        var $label = one.lib.form.label('Verify Password');
+        var $input = one.lib.form.input('Verify Password');
+        $input.attr('id', one.main.admin.id.modal.add.form.verify);
+        $input.attr('type', 'password');
+        $fieldset.append($label).append($input);
       }
       // roles
       var $label = one.lib.form.label('Roles');
@@ -449,10 +441,10 @@ one.main.admin = {
       };
       var $select = one.lib.form.select.create(options);
       $select.attr('id', one.main.admin.id.modal.add.form.role);
-      if(edit) {
-          $select.children().each(function() {
-                 this.selected = (this.text == options[currentUser.roles[0]]);
-          });
+      if (edit) {
+        $select.children().each(function() {
+          this.selected = (this.text == options[currentUser.roles[0]]);
+        });
       }
 
       $fieldset.append($label).append($select);
@@ -464,13 +456,13 @@ one.main.admin = {
 
       var buttonText = edit ? "Update User" : "Add User";
 
-      var addButton = one.lib.dashlet.button.single(buttonText,
-          one.main.admin.id.modal.add.user, "btn-primary", "");
+      var addButton = one.lib.dashlet.button.single(buttonText, one.main.admin.id.modal.add.user,
+          "btn-primary", "");
       var $addButton = one.lib.dashlet.button.button(addButton);
       footer.push($addButton);
 
-      var closeButton = one.lib.dashlet.button.single("Close",
-          one.main.admin.id.modal.add.close, "", "");
+      var closeButton = one.lib.dashlet.button.single("Close", one.main.admin.id.modal.add.close,
+          "", "");
       var $closeButton = one.lib.dashlet.button.button(closeButton);
       footer.push($closeButton);
 
@@ -481,26 +473,26 @@ one.main.admin = {
     initialize : function(id, successCallback) {
       var h3 = 'Change Password';
       var footer = one.main.admin.password.footer();
-      var $body = one.main.admin.password.body(id);;
-      var $modal = one.lib.modal.spawn(one.main.admin.id.modal.password.modal,
-          h3, $body, footer);
+      var $body = one.main.admin.password.body(id);
+      ;
+      var $modal = one.lib.modal.spawn(one.main.admin.id.modal.password.modal, h3, $body, footer);
 
       // cancel binding
-      $('#'+one.main.admin.id.modal.password.cancel, $modal).click(function() {
+      $('#' + one.main.admin.id.modal.password.cancel, $modal).click(function() {
         $modal.modal('hide');
       });
 
       // change password binding
-      $('#'+one.main.admin.id.modal.password.submit, $modal).click(function() {
+      $('#' + one.main.admin.id.modal.password.submit, $modal).click(function() {
         one.main.admin.password.submit(id, $modal, function(result) {
           if (result.success) {
             //if changed own password, enforce relogin
             if (id.trim() == $('#currentuser').val().trim()) {
-                alert("Password changed successfully. Please re-login with your new password.");
-                window.location = '/';
+              alert("Password changed successfully. Please re-login with your new password.");
+              window.location = '/';
             }
           } else {
-            alert(result.code+': '+result.description);
+            alert(result.code + ': ' + result.description);
           }
         });
       });
@@ -509,18 +501,18 @@ one.main.admin = {
     },
     submit : function(id, $modal, callback) {
       var resource = {};
-      resource.newPassword = $('#'+one.main.admin.id.modal.password.form.set, $modal).val();
+      resource.newPassword = $('#' + one.main.admin.id.modal.password.form.set, $modal).val();
 
       // verify password
-      var verify = $('#'+one.main.admin.id.modal.password.form.verify, $modal).val();
+      var verify = $('#' + one.main.admin.id.modal.password.form.verify, $modal).val();
       if (verify != resource.newPassword) {
         alert('Passwords do not match');
         return false;
       }
 
-      resource.currentPassword = $('#'+one.main.admin.id.modal.password.form.old, $modal).val();
+      resource.currentPassword = $('#' + one.main.admin.id.modal.password.form.old, $modal).val();
 
-      $.post(one.main.admin.address.password+id, resource, function(data) {
+      $.post(one.main.admin.address.password + id, resource, function(data) {
         callback(data);
       });
     },
@@ -532,8 +524,7 @@ one.main.admin = {
       var $input = one.lib.form.input('');
       $input.attr('disabled', 'disabled');
       $input.val(id);
-      $fieldset.append($label)
-        .append($input);
+      $fieldset.append($label).append($input);
       // old password
       var $label = one.lib.form.label('Old Password');
       var $input = one.lib.form.input('Old Password');
@@ -558,12 +549,12 @@ one.main.admin = {
     },
     footer : function() {
       var footer = [];
-      var submit = one.lib.dashlet.button.single('Submit',
-          one.main.admin.id.modal.password.submit, 'btn-primary', '');
+      var submit = one.lib.dashlet.button.single('Submit', one.main.admin.id.modal.password.submit,
+          'btn-primary', '');
       var $submit = one.lib.dashlet.button.button(submit);
       footer.push($submit);
-      var cancel = one.lib.dashlet.button.single('Cancel',
-          one.main.admin.id.modal.password.cancel, '', '');
+      var cancel = one.lib.dashlet.button.single('Cancel', one.main.admin.id.modal.password.cancel,
+          '', '');
       var $cancel = one.lib.dashlet.button.button(cancel);
       footer.push($cancel);
       return footer;
@@ -581,23 +572,25 @@ one.main.cluster = {
     var h3 = 'Cluster Management';
     var footer = one.main.cluster.footer();
     var $body = '';
-    var $modal = one.lib.modal.spawn(one.main.cluster.id.modal, h3, $body, footer); 
+    var $modal = one.lib.modal.spawn(one.main.cluster.id.modal, h3, $body, footer);
 
     // close
-    $('#'+one.main.cluster.id.close, $modal).click(function() {
+    $('#' + one.main.cluster.id.close, $modal).click(function() {
       $modal.modal('hide');
     });
 
     // body
     $.getJSON('/admin/cluster', function(data) {
       var $gridHTML = one.lib.dashlet.datagrid.init(one.main.cluster.id.datagrid, {
-        searchable: true,
-          filterable: false,
-          pagination: true,
-          flexibleRowsPerPage: true
+        searchable : true,
+        filterable : false,
+        pagination : true,
+        flexibleRowsPerPage : true
       }, 'table-striped table-condensed table-cursor');
       var source = one.main.cluster.data(data);
-      $gridHTML.datagrid({dataSource : source}).on('loaded', function() {
+      $gridHTML.datagrid({
+        dataSource : source
+      }).on('loaded', function() {
         $(this).find('tbody tr').click(function() {
           var $tr = $(this);
           if ($tr.find('td:nth-child(1)').attr('colspan') === '1') {
@@ -619,40 +612,34 @@ one.main.cluster = {
       var name = controller.name;
       var address = controller.address;
       var $registry = $(document.createElement('span'));
-      $registry
-      .append(JSON.stringify(address))
-      .css('display', 'none')
-      .addClass('ux-id');
-    name = one.lib.dashlet.label(name, null)[0].outerHTML;
-    name += $registry[0].outerHTML;
-    if (controller.me === true) {
-      var me = one.lib.dashlet.label('*', 'label-inverse')[0].outerHTML;
-      name += '&nbsp;'+me;
-    }
-    if (controller.coordinator === true) {
-      var coord = one.lib.dashlet.label('C')[0].outerHTML;
-      name += '&nbsp;'+coord;
-    }
-    tdata.push({
-      'controller' : name,
-      'numNodes'   : controller.numConnectedNodes
-    });
+      $registry.append(JSON.stringify(address)).css('display', 'none').addClass('ux-id');
+      name = one.lib.dashlet.label(name, null)[0].outerHTML;
+      name += $registry[0].outerHTML;
+      if (controller.me === true) {
+        var me = one.lib.dashlet.label('*', 'label-inverse')[0].outerHTML;
+        name += '&nbsp;' + me;
+      }
+      if (controller.coordinator === true) {
+        var coord = one.lib.dashlet.label('C')[0].outerHTML;
+        name += '&nbsp;' + coord;
+      }
+      tdata.push({
+        'controller' : name,
+        'numNodes' : controller.numConnectedNodes
+      });
     });
     var source = new StaticDataSource({
-        columns : [
-            {
-              property : 'controller',
-                label : 'Controller',
-                sortable : true
-            },
-            {
-                property : 'numNodes',
-                label    : 'Nodes',
-                sortable : true
-            }
-        ],
-        data : tdata,
-        delay : 0
+      columns : [ {
+        property : 'controller',
+        label : 'Controller',
+        sortable : true
+      }, {
+        property : 'numNodes',
+        label : 'Nodes',
+        sortable : true
+      } ],
+      data : tdata,
+      delay : 0
     });
     return source;
   },
@@ -678,20 +665,22 @@ one.main.cluster.nodes = {
     var $modal = one.lib.modal.spawn(one.main.cluster.nodes.id.modal, h3, $body, footer);
 
     // close
-    $('#'+one.main.cluster.nodes.id.close, $modal).click(function() {
+    $('#' + one.main.cluster.nodes.id.close, $modal).click(function() {
       $modal.modal('hide');
     });
 
     // body
-    $.getJSON('/admin/cluster/controller/'+address, function(data) {
+    $.getJSON('/admin/cluster/controller/' + address, function(data) {
       var $gridHTML = one.lib.dashlet.datagrid.init(one.main.cluster.nodes.id.datagrid, {
-        searchable: true,
-          filterable: false,
-          pagination: true,
-          flexibleRowsPerPage: true
+        searchable : true,
+        filterable : false,
+        pagination : true,
+        flexibleRowsPerPage : true
       }, 'table-striped table-condensed');
       var source = one.main.cluster.nodes.data(data);
-      $gridHTML.datagrid({dataSource : source});
+      $gridHTML.datagrid({
+        dataSource : source
+      });
       one.lib.modal.inject.body($modal, $gridHTML);
     });
 
@@ -705,15 +694,13 @@ one.main.cluster.nodes = {
       });
     });
     var source = new StaticDataSource({
-      columns : [
-    {
-      property : 'node',
+      columns : [ {
+        property : 'node',
         label : 'Node',
         sortable : true
-    }
-    ],
-        data : tdata,
-        delay : 0
+      } ],
+      data : tdata,
+      delay : 0
     });
     return source;
   },
@@ -786,7 +773,7 @@ $("#osgi").click(function() {
 $.ajaxSetup({
   complete : function(xhr, textStatus) {
     var mime = xhr.getResponseHeader('Content-Type');
-     if (mime && mime != null && mime.substring(0, 9) == 'text/html') {
+    if (mime && mime != null && mime.substring(0, 9) == 'text/html') {
       location.href = '/';
     }
   }
