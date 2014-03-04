@@ -786,7 +786,7 @@ $("#osgi").click(function() {
 $.ajaxSetup({
   complete : function(xhr, textStatus) {
     var mime = xhr.getResponseHeader('Content-Type');
-    if (mime.substring(0, 9) == 'text/html') {
+     if (mime && mime != null && mime.substring(0, 9) == 'text/html') {
       location.href = '/';
     }
   }
