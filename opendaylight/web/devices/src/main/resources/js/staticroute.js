@@ -1,4 +1,4 @@
-define([ 'datasource' ], function(StaticDataSource) {
+define(['global', 'datasource' ], function(one, StaticDataSource) {
   var staticRoute = {
     id : {
       dashlet : {

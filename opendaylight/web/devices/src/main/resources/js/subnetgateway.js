@@ -1,6 +1,6 @@
 define(
-    [ 'datasource' ],
-    function(StaticDataSource) {
+    ['global', 'datasource' ],
+    function(one, StaticDataSource) {
       var subnetGateway = {
         id : {
           dashlet : {

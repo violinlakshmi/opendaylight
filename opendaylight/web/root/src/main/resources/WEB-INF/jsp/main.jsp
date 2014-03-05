@@ -170,8 +170,6 @@
  </div>
  <!-- END modal -->
 
- <!-- Lib JS - 6 -->
- <script src="/js/lib.js"></script>
  <%
      String jsPath = "/WEB-INF/jsp/customjs.jsp";
      URL jsURL = pageContext.getServletContext().getResource(jsPath);
@@ -182,8 +180,6 @@
      } else {
  %>
 
- <!-- Topology JS - 8 -->
- <script src="/js/open-topology.js"></script>
  <%
      }
  %>

@@ -14,10 +14,9 @@ requirejs.config({
   }
 });
 
-require([ 'datasource', 'devices/nodeslearnt', 'devices/staticroute', 'devices/subnetgateway',
-    'devices/spanport', 'devices/connection', 'underscore', 'fuelux/loader.min' ], function(
-    StaticDataSource, nodeslearnt, staticRouteConfig, subnetGatewayConfig, spanPortConfig,
-    connection) {
+require([ 'global', 'datasource', 'devices/nodeslearnt', 'devices/staticroute', 'devices/subnetgateway',
+    'devices/spanport', 'devices/connection', 'underscore', 'fuelux/loader.min', 'lib' ], function(one,
+    StaticDataSource, nodeslearnt, staticRouteConfig, subnetGatewayConfig, spanPortConfig, connection) {
   one.f = {};
   // specify dashlets and layouts
   one.f.dashlet = {
